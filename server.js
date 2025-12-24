@@ -46,6 +46,9 @@ app.get('/test-db', async (req, res) => {
         res.status(500).json({ error: 'BD ERROR', details: err.message })
     }
 })
+app.get('/', (req, res) => {
+    res.send('API PTU backend is runing')
+})
 app.post('/Login', async (req, res) => {
     const { email, password } = req.body;
 
