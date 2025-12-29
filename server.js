@@ -15,7 +15,10 @@ const gesCompte = require('./gesCompte')
 const gesAccueil = require('./gesAccueil')
 const gesHist = require('./gesHist')
 
-app.use(cors());
+app.use(cors({
+    origin: ["https://ptu-teal.vercel.app"],
+    credentials: true
+}));
 app.use(express.json());
 app.use(bodyParser.json());
 app.use(express.json());
