@@ -1,5 +1,5 @@
 require("dotenv").config();
-console.log("ENV", process.env.DB_URL)
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -14,6 +14,7 @@ const router = express.Router();
 const gesCompte = require('./gesCompte')
 const gesAccueil = require('./gesAccueil')
 const gesHist = require('./gesHist')
+
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
@@ -26,23 +27,19 @@ app.use('/api', gesHist);
 
 app.use('/uploads', express.static('uploads'));
 app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
-const { Pool } = require("pg");
-const pool = new Pool({
-    connectionString: process.env.DB_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
-});
-pool.connect()
-    .then(() => console.log("conexion a neon reussi"))
-    .catch(err => console.error("erreur de conexion a neon:", err))
+
+
+const pool = require("./pool")
 
 app.get('/test-db', async (req, res) => {
     try {
         const result = await pool.query('SELECT NOW()');
-        res.json({ succes: true, time: result.row });
+        res.json({
+            status: ok,
+            dbTime: result.row[0].now
+        });
     } catch (err) {
-        console.error(err);
+        console.error("db error", err);
         res.status(500).json({ error: 'BD ERROR', details: err.message })
     }
 })
@@ -217,7 +214,7 @@ router.post('/api/projets/:id/comment', authentificateToken, async (req, res) =>
 
 
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`serveur demarré sur le http://localhost:${PORT} `);
 });

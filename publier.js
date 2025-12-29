@@ -15,14 +15,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 require('dotenv').config();
-const { Pool } = require('pg')
-const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST ,
-    database:  process.env.DB_NAME,
-    password:  process.env.DB_PASSWORD,
-    port:  process.env.DB_PORT,
-});
+const pool = require("./pool")
 //middleware pour verifier le token 
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers.authorization;

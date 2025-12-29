@@ -3,14 +3,7 @@ const router = express.Router();
 
 const authenticateToken = require('./auth')
 require('dotenv').config();
-const { Pool } = require('pg')
-const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST ,
-    database:  process.env.DB_NAME,
-    password:  process.env.DB_PASSWORD,
-    port:  process.env.DB_PORT,
-});
+const pool = require("./pool")
 //recuperer touts les projets avec infos utilisateurs
 router.get('/gesAccueil', authenticateToken, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
