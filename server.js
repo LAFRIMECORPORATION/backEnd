@@ -49,6 +49,9 @@ app.get('/test-db', async (req, res) => {
 app.get('/', (req, res) => {
     res.send('API PTU backend is runing')
 })
+app.get('/healh', (req, res) => {
+    res.status(200).json({status: 'ok' })
+})
 app.post('/Login', async (req, res) => {
     const { email, password } = req.body;
 
