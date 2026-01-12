@@ -16,10 +16,7 @@ const gesAccueil = require('./gesAccueil')
 const gesHist = require('./gesHist')
 
 app.use(cors({
-    origin:[
-             "https://ptu-teal.vercel.app"
-             "http://localhost:5173"
-    ],
+    origin:["http://localhost:5173"],
     credentials: true
 }));
 app.use(express.json());
@@ -42,7 +39,7 @@ app.get('/test-db', async (req, res) => {
         const result = await pool.query('SELECT NOW()');
         res.json({
             status: ok,
-            dbTime: result.row[0].now
+            dbTime: result.row[0].nowgit
         });
     } catch (err) {
         console.error("db error", err);
