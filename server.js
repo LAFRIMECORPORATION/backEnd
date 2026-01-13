@@ -16,7 +16,9 @@ const gesAccueil = require('./gesAccueil')
 const gesHist = require('./gesHist')
 
 app.use(cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173",
+        "https://vitereact-blue.vercel.app"
+    ],
     credentials: true
 }));
 app.use(express.json());
