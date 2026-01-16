@@ -9,9 +9,9 @@ const pool = new Pool({
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
 });
-pool.on()
-    .then(() => console.log("conexion a neon reussi"))
-    .catch(err => console.error("erreur de conexion a neon:", err))
-process.exit(1)
+pool.on("error", (err) => {
+    console.error("unexpected postgreSQL error", err)
+})
+
 
 module.exports = pool;
