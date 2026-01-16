@@ -14,4 +14,4 @@ pool.connect()
     .then(() => console.log("conexion a neon reussi"))
     .catch(err => console.error("erreur de conexion a neon:", err))
 
-module.exports = pool;
+export default pool;
