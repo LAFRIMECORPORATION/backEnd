@@ -5,12 +5,13 @@ const pool = new Pool({
     ssl: {
         rejectUnauthorized: false
     },
-    max: 5,
+    max: 3,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
 });
-pool.connect()
+pool.on()
     .then(() => console.log("conexion a neon reussi"))
     .catch(err => console.error("erreur de conexion a neon:", err))
+process.exit(1)
 
 module.exports = pool;

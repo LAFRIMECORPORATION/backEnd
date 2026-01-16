@@ -35,6 +35,9 @@ app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
 
 
 const pool = require("./pool")
+pool.query("SELECT 1")
+    .then(() => console.log("postgreSQL connected"))
+    .catch(err => console.error("pg failed"));
 
 app.get('/test-db', async (req, res) => {
     try {
