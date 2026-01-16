@@ -17,7 +17,7 @@ const gesHist = require('./gesHist')
 
 app.use(cors({
     origin: ["http://localhost:5173",
-        "https://vitereact-blue.vercel.app"
+        "https://vitereact-8ef2.vercel.app"
     ],
     credentials: true
 }));
