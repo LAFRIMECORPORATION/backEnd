@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' })
 })
-app.post('/Login', async (req, res) => {
+app.post('/api/Login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -108,7 +108,7 @@ app.post('/Login', async (req, res) => {
 
 
 
-app.post('/signup', async (req, res) => {
+app.post('/api/signup', async (req, res) => {
     const { username, email, password, genre, numero } = req.body;
     try {
         const userExitts = await pool.query('SELECT * FROM users WHERE email = $1', [email])
