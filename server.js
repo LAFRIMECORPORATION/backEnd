@@ -27,7 +27,7 @@ app.use(express.json());
 app.use(bodyParser.json());
 app.use(express.json());
 app.use('/api/publier', publier);
-app.use('/api', crudserv);
+app.use('/api/crudserv', crudserv);
 app.use('/api/users', gesCompte);
 app.use('/api/gesAccueil', gesAccueil);
 app.use('/api/historique', gesHist);
