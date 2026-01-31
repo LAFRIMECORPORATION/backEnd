@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
     res.json(users.rows);
 });
 //update
-router.put('//:id', async (req, res) => {
+router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { username, email, password, genre, numero } = req.body;
     try {
@@ -38,7 +38,7 @@ router.put('//:id', async (req, res) => {
 
 });
 //delete
-router.delete('//:id', async (req, res) => {
+router.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
     res.json({ message: 'utilisateur supprime' });
 });
