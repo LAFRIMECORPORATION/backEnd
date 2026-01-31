@@ -37,19 +37,10 @@ app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
 
 
 const pool = require("./pool")
-    (async () => {
-        try {
-            await pool.query("SELECT 1")
-            console.log('bd prete')
-                .then(() => console.log("postgreSQL connected"))
-                .catch(err => console.error("pg failed"));
-        } catch (err) {
-            console.error('erreur au demarrage', err)
-        }
 
-    }
-    )
-
+pool.query("SELECT 1")
+    .then(() => console.log("postgreSQL connected"))
+    .catch(err => console.error("pg failed"));
 
 app.get('/test-db', async (req, res) => {
     try {
