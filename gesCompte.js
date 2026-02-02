@@ -8,7 +8,7 @@ require('dotenv').config();
 const pool = require("./pool")
 //configuration stockage image
 const storage = multer.diskStorage({
-    destination: 'UPLOAD/',
+    destination: '  uploads/',
     filename: (req, file, cb) => {
         const unique = Date.now() + '-'
             + Math.round(Math.random() * 1e9);
