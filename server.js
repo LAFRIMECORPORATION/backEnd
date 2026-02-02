@@ -32,7 +32,7 @@ app.use('/api/users', gesCompte);
 app.use('/api/gesAccueil', gesAccueil);
 app.use('/api/historique', gesHist);
 
-app.use('/uploads', express.static('uploads'));
+app.use('/upload', express.static(path.join(__dirname, 'upload')));
 app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
 
 
