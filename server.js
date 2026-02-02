@@ -32,8 +32,8 @@ app.use('/api/users', gesCompte);
 app.use('/api/gesAccueil', gesAccueil);
 app.use('/api/historique', gesHist);
 
-app.use('/upload', express.static(path.join(__dirname, 'upload')));
-app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD'))); ss
 
 
 const pool = require("./pool")
