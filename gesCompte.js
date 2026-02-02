@@ -17,7 +17,7 @@ const storage = multer.diskStorage({
 })
 const upload = multer({ storage: storage })
 //get user info 
-router.get('/users/:id', async (req, res) => {
+router.get('/:id', async (req, res) => {
     const userId = parseInt(req.params.id, 10)// securiser l id
     if (isNaN(userId)) {
         return res.status(404).send('id utilisateur invalide');
@@ -34,7 +34,7 @@ router.get('/users/:id', async (req, res) => {
     }
 })
 //put update user info + photo
-router.put('/users/:id', upload.single('photo'), async (req, res) => {
+router.put('/:id', upload.single('photo'), async (req, res) => {
 
     const userId = parseInt(req.params.id, 10); // conversion securisé
     if (isNaN(userId))
