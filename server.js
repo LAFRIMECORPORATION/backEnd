@@ -14,6 +14,7 @@ const router = express.Router();
 const gesCompte = require('./gesCompte')
 const gesAccueil = require('./gesAccueil')
 const gesHist = require('./gesHist')
+const { fileUrlToPath } = require('url')
 
 app.use(cors({
     origin: ["http://localhost:5173",
@@ -32,11 +33,13 @@ app.use('/api/users', gesCompte);
 app.use('/api/gesAccueil', gesAccueil);
 app.use('/api/historique', gesHist);
 
+const __filename = fileUrlToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const pool = require("./pool")
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
 
 
-const pool = require("./pool")
 
 pool.query("SELECT 1")
     .then(() => console.log("postgreSQL connected"))
