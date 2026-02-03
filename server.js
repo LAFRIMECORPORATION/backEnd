@@ -35,6 +35,7 @@ app.use('/api/historique', gesHist);
 
 const __filename = fileUrlToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 const pool = require("./pool")
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/UPLOAD', express.static(path.join(__dirname, 'UPLOAD')));
