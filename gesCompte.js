@@ -5,7 +5,7 @@ const multer = require('multer')
 const path = require('path')
 
 require('dotenv').config();
-const pool = require("./pool")
+const pool = require("./pool") 
 //configuration stockage image
 const storage = multer.diskStorage({
     destination: 'uploads/',
