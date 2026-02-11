@@ -49,7 +49,7 @@ const verifyToken = (req, res, next) => {
 }
 //ajouter un projet
 
-router.post('/publier', verifyToken, upload.single('fichier'), async (req, res) => {
+router.post('/', verifyToken, upload.single('fichier'), async (req, res) => {
     const { titre, description, categorie } = req.body
     const userId = req.user.id
     const fichier = req.file ? req.file.filename : null;
