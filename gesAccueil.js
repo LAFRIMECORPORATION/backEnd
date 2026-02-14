@@ -5,7 +5,7 @@ const authenticateToken = require('./auth')
 require('dotenv').config();
 const pool = require("./pool")
 //recuperer touts les projets avec infos utilisateurs
-router.get('/gesAccueil', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 5;
     const offset = (page - 1) * limit;
