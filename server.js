@@ -12,7 +12,7 @@ const crudserv = require('./crudserv')
 const authentificateToken = require('./auth')
 const router = express.Router();
 const gesCompte = require('./gesCompte')
-const gesLikeCommentaire = require('./gesLikeCommentaire')
+const gestLikeCommentaire = require('./gestLikeCommentaire')
 const gesAccueil = require('./gesAccueil')
 const gesHist = require('./gesHist')
 const { fileUrlToPath } = require('url')
@@ -33,7 +33,7 @@ app.use('/api/crudserv', crudserv);
 app.use('/api/users', gesCompte);
 app.use('/api/gesAccueil', gesAccueil);
 app.use('/api/historique', gesHist);
-app.use('/api/projets', gesHist);
+app.use('/api/projets', gestLikeCommentaire);
 
 
 
