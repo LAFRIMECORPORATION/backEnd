@@ -19,7 +19,7 @@ const { fileUrlToPath } = require('url')
 
 app.use(cors({
     origin: ["http://localhost:5173",
-        "https://vitereact-8ef2-e1nftpiv7-lafrimecorporations-projects.vercel.app"
+        "https://vitereact-8ef2-aqq8hefdt-lafrimecorporations-projects.vercel.app"
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
 
