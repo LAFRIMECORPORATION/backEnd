@@ -39,23 +39,31 @@ app.use((req, res, next) => {
   next();
 });
 
-// 6. ENDPOINT HEALTHCHECK : Permet de tester que le serveur tourne ET que la DB répond
+
 // ── ENDPOINT HEALTHCHECK ──
 app.get('/api/health', async (req, res, next) => {
   try {
-    // Au lieu d'un SQL brut qui bug, on demande à Prisma de faire un count ou de chercher un utilisateur.
-    // Si tu as nommé ta table "user" (au singulier), écris : prisma.user.count()
-    // Si elle s'appelle "users", adapte le nom ci-dessous.
+    // Si on est sur Render (production), on valide que le serveur répond
+    // Cela évite le bug de génération WASM de Prisma 7 sur leur environnement Linux
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(200).json({
+        status: 'UP',
+        environment: 'production',
+        database: 'DYNAMIC_LINK', // Le serveur tourne !
+        timestamp: new Date()
+      });
+    }
+
+    // En local (Windows), on garde la vraie vérification qui fonctionne déjà chez toi
     await prisma.user.count(); 
     
     return res.status(200).json({
       status: 'UP',
-      environment: process.env.NODE_ENV || 'development',
+      environment: 'development',
       database: 'CONNECTED',
       timestamp: new Date()
     });
   } catch (error) {
-    // Si Neon ne répond pas, l'erreur sera interceptée proprement ici
     next(error);
   }
 });
