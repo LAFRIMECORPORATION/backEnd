@@ -298,6 +298,5 @@ model PushSubscription {
   createdAt DateTime @default(now())
 }
 
-/ ==========================================
-// npx prisma studio --port 5555
 // ==========================================
+// npx prisma studio --port 5555
