@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+import authRoutes from './routes/authRoutes.js';
 
 // Chargement des variables d'environnement
 dotenv.config();
@@ -39,6 +40,9 @@ app.use((req, res, next) => {
   next();
 });
 
+
+// ── ROUTES API ──
+app.use('/api/auth', authRoutes);
 
 // ── ENDPOINT HEALTHCHECK ──
 app.get('/api/health', async (req, res, next) => {
