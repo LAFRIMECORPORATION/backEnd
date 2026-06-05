@@ -18,7 +18,7 @@ app.use(helmet());
 
 // 2. ACCÈS : Configurer CORS pour autoriser ton futur frontend React
 app.use(cors({
-  origin:  "https://launch-pad-eosin.vercel.app/"  || 'http://localhost:5173',
+  origin:  "https://launch-oz62gfci5-lafrimecorporations-projects.vercel.app/"  || 'http://localhost:5173',
   credentials: true
 }));
 
