@@ -17,8 +17,23 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // 2. ACCÈS : Configurer CORS pour autoriser ton futur frontend React
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://launch-pad-eosin.vercel.app',
+  'https://launch-oz62gfci5-lafrimecorporations-projects.vercel.app' // (Sans le "/" à la fin)
+];
+
 app.use(cors({
-  origin:  "https://launch-oz62gfci5-lafrimecorporations-projects.vercel.app/"  || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // Permet aux outils comme Postman ou le dev local de passer
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Bloqué par CORS (LaFrimeCorporation Security)'));
+    }
+  },
   credentials: true
 }));
 
