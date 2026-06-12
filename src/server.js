@@ -15,7 +15,13 @@ const PORT = process.env.PORT || 5000;
 
 // 1. SÉCURITÉ : Configurer Helmet pour protéger les headers HTTP
 app.use(helmet());
-
+// Petite route d'accueil pour dire à UptimeRobot que le serveur va très bien
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: "success", 
+    message: "Serveur Launchpad opérationnel et réveillé ! 🔥" 
+  });
+});
 // 2. ACCÈS : Configurer CORS pour autoriser ton futur frontend React
 const allowedOrigins = [
   'http://localhost:5173',
