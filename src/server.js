@@ -46,13 +46,30 @@ setupSocketIO(io);
 
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy:{ policy:"cross-origin" } }));
+// ── Liste des origines autorisées ─────────────────────────
+const allowedOrigins = [
+  "https://launch-pad-eosin.vercel.app",        // Ton Frontend Vercel Production
+  "http://localhost:5173",                      // Vite Local
+  "http://localhost:3000",                      // Local alternatif
+  "http://127.0.0.1:5173"                       // IP locale
+];
+
 app.use(cors({
-  origin: env.IS_PROD
-    ? [env.FRONTEND_URL]
-    : ["http://localhost:5173","http://localhost:3000","http://127.0.0.1:5173"],
-  methods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders:["Content-Type","Authorization","X-Requested-With","Accept"], // 👈 Plus robuste
-  credentials:true,
+  origin: function (origin, callback) {
+    // Permet aux requêtes sans origine (comme Postman, ou les outils internes) de passer
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`[CORS Bloqué] Origine non autorisée : ${origin}`);
+      callback(new Error("Non autorisé par CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+  credentials: true,
+  optionsSuccessStatus: 200 // Important pour les requêtes Preflight (OPTIONS) sur certains navigateurs
 }));
 app.use(express.json({ limit:"10mb" }));
 app.use(express.urlencoded({ extended:true, limit:"10mb" }));
