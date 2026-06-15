@@ -1,113 +1,112 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
-import authRoutes from './routes/authRoutes.js';
+// ============================================================
+// LAUNCHPAD — server.js  Phase 4 — avec Socket.io
+// ============================================================
 
-// Chargement des variables d'environnement
-dotenv.config();
+import "dotenv/config";
+import { createServer } from "http";
+import express    from "express";
+import cors       from "cors";
+import helmet     from "helmet";
+import morgan     from "morgan";
+import { Server } from "socket.io";
 
-const app = express();
-const prisma = new PrismaClient();
-const PORT = process.env.PORT || 5000;
+import { env }             from "./config/env.js";
+import { connectDatabase } from "./config/database.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { apiLimiter }      from "./middleware/rateLimiter.js";
+import { setupSocketIO }   from "./socket.js";
 
-// 1. SÉCURITÉ : Configurer Helmet pour protéger les headers HTTP
-app.use(helmet());
+// ── Routers ───────────────────────────────────────────────
+import authRouter     from "./modules/auth/auth.router.js";
+import usersRouter    from "./modules/users/users.router.js";
+import kycRouter      from "./modules/kyc/kyc.router.js";
+import projectsRouter from "./modules/projects/projects.router.js";
+import messagesRouter from "./modules/messages/messages.router.js";  // 🆕
 
-// 2. ACCÈS : Configuration CORS ultra-flexible (Accepte le local ET toutes les URLs Vercel automatiquement)
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000'
-];
+const app    = express();
+const server = createServer(app);  // HTTP server pour Socket.io
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Permet aux outils comme UptimeRobot, Postman ou le dev local sans origine de passer
-    if (!origin) return callback(null, true);
-    
-    // Accepte si l'origine est dans la liste OU si elle se termine par .vercel.app
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app') || origin.includes('vercel.app')) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Bloqué par CORS (LaFrimeCorporation Security)'));
-    }
+// ── Socket.io ─────────────────────────────────────────────
+const io = new Server(server, {
+  cors: {
+    origin: env.IS_PROD
+      ? [env.FRONTEND_URL]
+      : ["http://localhost:5173", "http://localhost:3000"],
+    methods: ["GET","POST"],
+    credentials: true,
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  transports: ["websocket","polling"],
+});
+
+// Rendre io accessible dans les routes (req.app.get("io"))
+app.set("io", io);
+
+// Configurer les événements Socket.io
+setupSocketIO(io);
+
+// ── Middleware ────────────────────────────────────────────
+app.use(helmet({ crossOriginResourcePolicy:{ policy:"cross-origin" } }));
+app.use(cors({
+  origin: env.IS_PROD
+    ? [env.FRONTEND_URL]
+    : ["http://localhost:5173","http://localhost:3000","http://127.0.0.1:5173"],
+  methods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders:["Content-Type","Authorization"],
+  credentials:true,
 }));
+app.use(express.json({ limit:"10mb" }));
+app.use(express.urlencoded({ extended:true, limit:"10mb" }));
+app.use(morgan(env.IS_PROD ? "combined" : "dev"));
+app.use("/api/", apiLimiter);
 
-// 3. BODY PARSER : Permet à Express de lire et comprendre le JSON (req.body)
-app.use(express.json());
-
-// 4. LOGGING & NETTOYAGE : Supprime les doubles slashes accidentels dans les requêtes de Vercel
-app.use((req, res, next) => {
-  // Si l'URL contient un double slash (ex: //auth/login), on la nettoie en interne (/auth/login)
-  if (req.url.startsWith('//')) {
-    req.url = req.url.replace(/^\/+/, '/');
-  }
-  console.log(`[${new Date().toISOString()}] 🛰️  ${req.method} ${req.url}`);
-  next();
-});
-
-// 5. ANTI-DDOS : Limiter le nombre de requêtes par IP
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // Fenêtre de 15 minutes
-  max: 100, // Limite chaque IP à 100 requêtes par fenêtre
-  message: { error: 'Trop de requêtes formulées depuis cette IP, veuillez réessayer après 15 minutes.' }
-});
-app.use('/auth', limiter); // Appliqué sur les routes d'authentification
-
-// ── ROUTE D'ACCUEIL (Pour UptimeRobot et les tests) ──
-app.get('/', (req, res) => {
-  res.status(200).json({ 
-    status: "success", 
-    message: "Serveur Launchpad opérationnel, réveillé et blindé ! 🔥" 
+// ── Health ────────────────────────────────────────────────
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status:"ok", environment:env.NODE_ENV,
+    timestamp:new Date().toISOString(), version:"1.0.0",
+    phases:["auth","users","kyc","projects","messages"],
+    socketio:true,
   });
 });
 
-// ── ROUTES API (Adaptées pour recevoir directement /auth/login depuis Vercel) ──
-app.use('/auth', authRoutes);
+// ── Routes API ────────────────────────────────────────────
+app.use("/api/auth",     authRouter);
+app.use("/api/users",    usersRouter);
+app.use("/api/kyc",      kycRouter);
+app.use("/api/projects", projectsRouter);
+app.use("/api",          messagesRouter);  // /api/conversations + /api/messages
 
-// ── ENDPOINT HEALTHCHECK ──
-app.get('/health', async (req, res, next) => {
+// Phase 5+
+// app.use("/api/payments",       paymentsRouter);
+// app.use("/api/investments",    investmentsRouter);
+// app.use("/api/forum",          forumRouter);
+// app.use("/api/appointments",   appointmentsRouter);
+// app.use("/api/notifications",  notificationsRouter);
+// app.use("/api/feed",           feedRouter);
+// app.use("/api/admin",          adminRouter);
+
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// ── Démarrage ─────────────────────────────────────────────
+async function start() {
   try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(200).json({
-        status: 'UP',
-        environment: 'production',
-        database: 'DYNAMIC_LINK',
-        timestamp: new Date()
-      });
-    }
-
-    await prisma.user.count(); 
-    return res.status(200).json({
-      status: 'UP',
-      environment: 'development',
-      database: 'CONNECTED',
-      timestamp: new Date()
+    await connectDatabase();
+    server.listen(env.PORT, () => {
+      console.log("");
+      console.log("🚀 ══════════════════════════════════════");
+      console.log(`   LAUNCHPAD API v1.0.0`);
+      console.log(`   Env  : ${env.NODE_ENV}`);
+      console.log(`   Port : ${env.PORT}`);
+      console.log(`   ✅ Auth · Users · KYC · Projects · Messages`);
+      console.log(`   ⚡ Socket.io activé`);
+      console.log("🚀 ══════════════════════════════════════");
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    console.error("❌ Démarrage échoué :", err);
+    process.exit(1);
   }
-});
+}
 
-// 6. GESTIONNAIRE D'ERREURS GLOBAL
-app.use((err, req, res, next) => {
-  console.error('❌ Erreur détectée sur le serveur :', err.stack);
-  const statusCode = err.statusCode || 500;
-  
-  res.status(statusCode).json({
-    error: true,
-    message: err.message || 'Une erreur interne du serveur est survenue.',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
-});
-
-// Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur Launchpad démarré sur le port ${PORT} [Mode: ${process.env.NODE_ENV || 'development'}]`);
-});
+start();
+export default app;
