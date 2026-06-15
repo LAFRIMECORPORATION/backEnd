@@ -28,7 +28,7 @@ export function generateRefreshToken(user) {
   return jwt.sign(
     { userId: user.id },
     env.JWT_REFRESH_SECRET,
-    { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
+    { expiresIn: env.JWT_REFRESH_EXPIRES_IN || "15m" }
   );
 }
 
