@@ -5,8 +5,10 @@
 // ============================================================
 
 import jwt from "jsonwebtoken";
-import { env } from "../../../backEnd/src/config/env.js";
-import prisma from "../../../backEnd/src/config/database.js";
+
+//  Chemins relatifs parfaits (valables en local ET en production sur Render) :
+import { env } from "../config/env.js";
+import prisma from "../config/database.js";
 
 // ── Générer un access token (15 min) ─────────────────────
 export function generateAccessToken(user) {
