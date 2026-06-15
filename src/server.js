@@ -51,13 +51,13 @@ app.use(cors({
     ? [env.FRONTEND_URL]
     : ["http://localhost:5173","http://localhost:3000","http://127.0.0.1:5173"],
   methods:["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders:["Content-Type","Authorization"],
+  allowedHeaders:["Content-Type","Authorization","X-Requested-With","Accept"], // 👈 Plus robuste
   credentials:true,
 }));
 app.use(express.json({ limit:"10mb" }));
 app.use(express.urlencoded({ extended:true, limit:"10mb" }));
 app.use(morgan(env.IS_PROD ? "combined" : "dev"));
-app.use("/api/", apiLimiter);
+app.use("/api", apiLimiter);
 
 // ── Health ────────────────────────────────────────────────
 app.get("/health", (_req, res) => {

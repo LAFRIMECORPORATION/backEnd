@@ -1,3 +1,9 @@
+// ============================================================
+// LAUNCHPAD — Prisma Schema
+// Chemin : prisma/schema.prisma
+// Base de données : Neon PostgreSQL
+// ============================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,298 +13,620 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Ensuite viennent tes 22 tables...
+// ── ENUMS ────────────────────────────────────────────────────
 
-// ==========================================
-// 1. MODULE UTILISATEURS & AUTHENTIFICATION
-// ==========================================
+enum Role {
+  student
+  investor
+  admin
+}
+
+enum KycStatus {
+  pending
+  submitted
+  approved
+  rejected
+}
+
+enum ProjectStatus {
+  draft
+  pending
+  active
+  funded
+  expired
+  rejected
+}
+
+enum ProjectStage {
+  idea
+  prototype
+  mvp
+  beta
+  launched
+}
+
+enum EquityType {
+  equity
+  revenue_share
+  loan
+  donation
+}
+
+enum InvestmentStatus {
+  pending
+  in_escrow
+  released
+  refunded
+  failed
+}
+
+enum PaymentMethod {
+  mtn_money
+  orange_money
+  stripe
+  bank_transfer
+}
+
+enum PaymentStatus {
+  initiated
+  processing
+  success
+  failed
+}
+
+enum CollaborationStatus {
+  pending
+  accepted
+  rejected
+  cancelled
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+  rescheduled
+}
+
+enum NotificationType {
+  like
+  comment
+  message
+  investment
+  collaboration
+  badge
+  appointment
+  kyc
+  system
+}
+
+enum FeedEventType {
+  project_published
+  project_funded
+  collaboration_formed
+  badge_earned
+  marketplace_posted
+  investment_made
+}
+
+enum MessageType {
+  text
+  file
+  project_share
+}
+
+enum ForumPostStatus {
+  active
+  deleted
+  pinned
+}
+
+// ── MODÈLES ──────────────────────────────────────────────────
 
 model User {
-  id              String             @id @default(uuid())
-  email           String             @unique
-  password        String
-  role            String             // "student", "investor", "admin"
-  kycValidated    Boolean            @default(false)
-  reputationScore Int                @default(0)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  profile         UserProfile?
-  badges          UserBadge[]
-  projects        Project[]
-  likes           ProjectLike[]
-  saves           ProjectSave[]
-  comments        Comment[]
-  conversations   Conversation[]     @relation("UserConversations")
-  messages        Message[]
-  collaborations  Collaboration[]
-  applications    RequestApplication[]
-  reports         Report[]
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  role            Role      @default(student)
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  avatarUrl       String?   @map("avatar_url")
+  bio             String?
+  reputationScore Int       @default(0) @map("reputation_score")
+  isVerified      Boolean   @default(false) @map("is_verified")
+  isActive        Boolean   @default(true) @map("is_active")
+  kycValidated    Boolean   @default(false) @map("kyc_validated")
+  kycStatus       KycStatus @default(pending) @map("kyc_status")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  profile              UserProfile?
+  badges               UserBadge[]
+  projects             Project[]          @relation("ProjectAuthor")
+  projectLikes         ProjectLike[]
+  projectSaves         ProjectSave[]
+  comments             Comment[]
+  sentMessages         Message[]          @relation("MessageSender")
+  conversations1       Conversation[]     @relation("ConvUser1")
+  conversations2       Conversation[]     @relation("ConvUser2")
+  investments          Investment[]
+  collaborationsFrom   Collaboration[]    @relation("CollabRequester")
+  investorRequests     InvestorRequest[]
+  applications         RequestApplication[]
+  appointmentsOrg      Appointment[]      @relation("AppointmentOrganizer")
+  appointmentsParticip Appointment[]      @relation("AppointmentParticipant")
+  notifications        Notification[]
+  feedEvents           FeedEvent[]
+  reports              Report[]
+  auditLogs            AuditLog[]
+  pushSubscriptions    PushSubscription[]
+  refreshTokens        RefreshToken[]
+  forumPosts           ForumPost[]
+  academyEnrollments   AcademyEnrollment[]
+
+  @@map("users")
 }
 
 model UserProfile {
-  id                 String   @id @default(uuid())
-  userId             String   @unique
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  firstName          String
-  lastName           String
-  university         String?
-  skills             String[] 
-  bio                String?
-  cvUrl              String?  
-  linkedinUrl        String?
-  companyName        String?  
-  investmentCriteria String?  
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  university        String?
+  company           String?
+  location          String?
+  skills            String[]
+  interests         String[]
+  linkedinUrl       String?  @map("linkedin_url")
+  githubUrl         String?  @map("github_url")
+  portfolioUrl      String?  @map("portfolio_url")
+  cvUrl             String?  @map("cv_url")
+  availability      String?
+  minTicket         Decimal? @map("min_ticket") @db.Decimal(15, 2)
+  maxTicket         Decimal? @map("max_ticket") @db.Decimal(15, 2)
+  investmentRegions String[] @map("investment_regions")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
 }
 
 model UserBadge {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  badgeName   String   
-  iconUrl     String?
-  points      Int      @default(0)
-  awardedAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  badgeType    String   @map("badge_type")
+  badgeLabel   String   @map("badge_label")
+  badgeIcon    String   @map("badge_icon")
+  pointsAwarded Int     @map("points_awarded")
+  awardedBy    String   @map("awarded_by")
+  awardedAt    DateTime @default(now()) @map("awarded_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_badges")
 }
 
-// ==========================================
-// 2. MODULE PROJETS & ENGAGEMENT SOCIAL
-// ==========================================
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
 
 model Project {
-  id            String         @id @default(uuid())
+  id            String        @id @default(uuid())
+  authorId      String        @map("author_id")
   title         String
-  description   String
+  tagline       String
   category      String
-  businessModel String
-  budgetGoal    Float
-  fundsRaised   Float          @default(0)
-  isVisible     Boolean        @default(false) 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  
-  // Correction IA : Type Json pour éviter le problème d'extension pgvector
-  embedding     Json?
+  description   String
+  problem       String?
+  solution      String?
+  businessModel String?       @map("business_model")
+  stage         ProjectStage  @default(idea)
+  goalAmount    Decimal       @map("goal_amount") @db.Decimal(15, 2)
+  raisedAmount  Decimal       @default(0) @map("raised_amount") @db.Decimal(15, 2)
+  equityPct     Decimal?      @map("equity_pct") @db.Decimal(5, 2)
+  equityType    EquityType    @default(equity) @map("equity_type")
+  deadline      DateTime?
+  tags          String[]
+  coverImageUrl String?       @map("cover_image_url")
+  pitchDeckUrl  String?       @map("pitch_deck_url")
+  demoVideoUrl  String?       @map("demo_video_url")
+  githubUrl     String?       @map("github_url")
+  status        ProjectStatus @default(draft)
+  viewsCount    Int           @default(0) @map("views_count")
+  likesCount    Int           @default(0) @map("likes_count")
+  sharesCount   Int           @default(0) @map("shares_count")
+  investorsCount Int          @default(0) @map("investors_count")
+  teamSize      Int           @default(1) @map("team_size")
+  adminNote     String?       @map("admin_note")
+  publishedAt   DateTime?     @map("published_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  ownerId       String
-  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  likes         ProjectLike[]
-  saves         ProjectSave[]
-  comments      Comment[]
-  investments   Investment[]
-  milestones    EscrowMilestone[]
-  collaborations Collaboration[]
-  conversations Conversation[]
+  author       User           @relation("ProjectAuthor", fields: [authorId], references: [id])
+  likes        ProjectLike[]
+  saves        ProjectSave[]
+  comments     Comment[]
+  investments  Investment[]
+  collaborationsFrom Collaboration[] @relation("CollabFrom")
+  collaborationsTo   Collaboration[] @relation("CollabTo")
+  feedEvents   FeedEvent[]
+  appointments Appointment[]
+
+  @@map("projects")
 }
 
 model ProjectLike {
   id        String   @id @default(uuid())
-  userId    String
-  projectId String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  userId    String   @map("user_id")
+  projectId String   @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+  @@map("project_likes")
 }
 
 model ProjectSave {
   id        String   @id @default(uuid())
-  userId    String
-  projectId String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  userId    String   @map("user_id")
+  projectId String   @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+  @@map("project_saves")
 }
 
 model Comment {
-  id        String    @id @default(uuid())
-  text      String
-  projectId String
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parentId  String?   
-  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   Comment[] @relation("CommentReplies")
-  createdAt DateTime  @default(now())
-}
-
-model FeedEvent {
   id        String   @id @default(uuid())
-  eventType String   
-  payload   Json     
-  createdAt DateTime @default(now())
+  projectId String   @map("project_id")
+  authorId  String   @map("author_id")
+  parentId  String?  @map("parent_id")
+  content   String
+  likesCount Int     @default(0) @map("likes_count")
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User     @relation(fields: [authorId], references: [id])
+  parent  Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@map("comments")
 }
-
-// ==========================================
-// 3. MODULE FINANCES & ESCROW SECURISÉ
-// ==========================================
-
-model Investment {
-  id            String   @id @default(uuid())
-  projectId     String
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  investorId    String
-  amount        Float
-  currency      String   
-  method        String   
-  escrowStatus  String   
-  createdAt     DateTime @default(now())
-}
-
-model PaymentTransaction {
-  id            String   @id @default(uuid())
-  providerTxId  String   @unique 
-  amount        Float
-  status        String   
-  rawWebhookLog Json     
-  createdAt     DateTime @default(now())
-}
-
-model EscrowMilestone {
-  id          String   @id @default(uuid())
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  amountShare Float    
-  status      String   
-  updatedAt   DateTime @updatedAt
-}
-
-// ==========================================
-// 4. MODULE MESSAGERIE TEMPS RÉEL (Socket.io)
-// ==========================================
 
 model Conversation {
-  id        String    @id @default(uuid())
-  projectId String
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  users     User[]    @relation("UserConversations")
-  messages  Message[]
-  createdAt DateTime  @default(now())
+  id            String    @id @default(uuid())
+  user1Id       String    @map("user1_id")
+  user2Id       String    @map("user2_id")
+  lastMessageAt DateTime? @map("last_message_at")
+  unreadUser1   Int       @default(0) @map("unread_user1")
+  unreadUser2   Int       @default(0) @map("unread_user2")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user1    User      @relation("ConvUser1", fields: [user1Id], references: [id])
+  user2    User      @relation("ConvUser2", fields: [user2Id], references: [id])
+  messages Message[]
+
+  @@unique([user1Id, user2Id])
+  @@map("conversations")
 }
 
 model Message {
-  id             String            @id @default(uuid())
-  conversationId String
-  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  senderId       String
-  sender         User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  id             String      @id @default(uuid())
+  conversationId String      @map("conversation_id")
+  senderId       String      @map("sender_id")
   content        String
-  mediaUrl       String?           
-  createdAt      DateTime          @default(now())
-  reactions      MessageReaction[]
+  messageType    MessageType @default(text) @map("message_type")
+  fileUrl        String?     @map("file_url")
+  isRead         Boolean     @default(false) @map("is_read")
+  readAt         DateTime?   @map("read_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@map("messages")
 }
 
-model MessageReaction {
-  id        String   @id @default(uuid())
-  messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  emoji     String   
-  userId    String
+model Investment {
+  id                String           @id @default(uuid())
+  investorId        String           @map("investor_id")
+  projectId         String           @map("project_id")
+  amount            Decimal          @db.Decimal(15, 2)
+  currency          String           @default("XAF")
+  paymentMethod     PaymentMethod    @map("payment_method")
+  status            InvestmentStatus @default(pending)
+  escrowRef         String?          @map("escrow_ref")
+  externalTxId      String?          @map("external_tx_id")
+  equityPctAcquired Decimal?         @map("equity_pct_acquired") @db.Decimal(5, 2)
+  platformFee       Decimal          @default(0) @map("platform_fee") @db.Decimal(15, 2)
+  notes             String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  investor     User                 @relation(fields: [investorId], references: [id])
+  project      Project              @relation(fields: [projectId], references: [id])
+  transactions PaymentTransaction[]
+  milestones   EscrowMilestone[]
+
+  @@map("investments")
 }
 
-// ==========================================
-// 5. MODULE COLLABORATION & MARKETPLACE
-// ==========================================
+model PaymentTransaction {
+  id             String        @id @default(uuid())
+  investmentId   String        @map("investment_id")
+  provider       String
+  providerTxId   String?       @unique @map("provider_tx_id")
+  amount         Decimal       @db.Decimal(15, 2)
+  currency       String        @default("XAF")
+  status         PaymentStatus @default(initiated)
+  webhookData    Json?         @map("webhook_data")
+  errorMessage   String?       @map("error_message")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_transactions")
+}
+
+model EscrowMilestone {
+  id              String   @id @default(uuid())
+  investmentId    String   @map("investment_id")
+  title           String
+  description     String
+  amountToRelease Decimal  @map("amount_to_release") @db.Decimal(15, 2)
+  dueDate         DateTime @map("due_date")
+  status          String   @default("pending")
+  validatedAt     DateTime? @map("validated_at")
+  validatedBy     String?  @map("validated_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@map("escrow_milestones")
+}
 
 model Collaboration {
-  id           String   @id @default(uuid())
-  projectId    String
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  studentId    String
-  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  roleInTeam   String   
-  status       String   
-  createdAt    DateTime @default(now())
+  id              String              @id @default(uuid())
+  requesterId     String              @map("requester_id")
+  projectFromId   String              @map("project_from_id")
+  projectToId     String              @map("project_to_id")
+  collabType      String              @map("collab_type")
+  message         String
+  skillsOffered   String[]            @map("skills_offered")
+  similarityScore Decimal?            @map("similarity_score") @db.Decimal(5, 2)
+  status          CollaborationStatus @default(pending)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  requester   User    @relation("CollabRequester", fields: [requesterId], references: [id])
+  projectFrom Project @relation("CollabFrom", fields: [projectFromId], references: [id])
+  projectTo   Project @relation("CollabTo", fields: [projectToId], references: [id])
+
+  @@map("collaborations")
 }
 
 model InvestorRequest {
-  id           String               @id @default(uuid())
-  title        String
-  description  String
-  type         String               
-  budget       Float?
-  createdAt    DateTime             @default(now())
+  id             String   @id @default(uuid())
+  authorId       String   @map("author_id")
+  reqType        String   @map("req_type")
+  title          String
+  description    String
+  skillsRequired String[] @map("skills_required")
+  budget         String?
+  duration       String?
+  isRemote       Boolean  @default(true) @map("is_remote")
+  applicantCount Int      @default(0) @map("applicant_count")
+  status         String   @default("active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  author       User                 @relation(fields: [authorId], references: [id])
   applications RequestApplication[]
+
+  @@map("investor_requests")
 }
 
 model RequestApplication {
-  id          String          @id @default(uuid())
-  requestId   String
-  request     InvestorRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  studentId   String
-  student     User            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  coverLetter String
-  status      String          
-  createdAt   DateTime        @default(now())
+  id           String   @id @default(uuid())
+  requestId    String   @map("request_id")
+  applicantId  String   @map("applicant_id")
+  coverMessage String?  @map("cover_message")
+  status       String   @default("pending")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  request   InvestorRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  applicant User            @relation(fields: [applicantId], references: [id])
+
+  @@unique([requestId, applicantId])
+  @@map("request_applications")
 }
 
 model Appointment {
-  id         String   @id @default(uuid())
-  hostId     String
-  guestId    String
-  scheduledAt DateTime
-  duration   Int      
-  meetUrl    String?  
-  status     String   
-  createdAt  DateTime @default(now())
-}
+  id            String            @id @default(uuid())
+  organizerId   String            @map("organizer_id")
+  participantId String            @map("participant_id")
+  projectId     String?           @map("project_id")
+  title         String
+  scheduledAt   DateTime          @map("scheduled_at")
+  durationMin   Int               @default(45) @map("duration_min")
+  meetingUrl    String?           @map("meeting_url")
+  status        AppointmentStatus @default(pending)
+  notes         String?
+  reminderSent  Boolean           @default(false) @map("reminder_sent")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
 
-// ==========================================
-// 6. ACADEMY, MODÉRATION & SECURITÉ (AUDIT)
-// ==========================================
+  organizer   User     @relation("AppointmentOrganizer", fields: [organizerId], references: [id])
+  participant User     @relation("AppointmentParticipant", fields: [participantId], references: [id])
+  project     Project? @relation(fields: [projectId], references: [id])
+
+  @@map("appointments")
+}
 
 model AcademyCourse {
   id          String   @id @default(uuid())
   title       String
   description String
-  contentUrl  String?  
-  isPremium   Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  courseType  String   @map("course_type")
+  contentUrl  String?  @map("content_url")
+  isPremium   Boolean  @default(false) @map("is_premium")
+  durationMin Int?     @map("duration_min")
+  level       String   @default("Débutant")
+  icon        String   @default("📚")
+  rating      Decimal  @default(0) @db.Decimal(3, 1)
+  enrollCount Int      @default(0) @map("enroll_count")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  enrollments AcademyEnrollment[]
+
+  @@map("academy_courses")
+}
+
+model AcademyEnrollment {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  courseId   String   @map("course_id")
+  progress   Int      @default(0)
+  completedAt DateTime? @map("completed_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course AcademyCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@map("academy_enrollments")
 }
 
 model ForumPost {
-  id        String   @id @default(uuid())
+  id         String   @id @default(uuid())
+  authorId   String   @map("author_id")
+  categoryId String   @map("category_id")
+  parentId   String?  @map("parent_id")
+  title      String?
+  content    String
+  likesCount Int      @default(0) @map("likes_count")
+  isPinned   Boolean  @default(false) @map("is_pinned")
+  isDeleted  Boolean  @default(false) @map("is_deleted")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  author   User        @relation(fields: [authorId], references: [id])
+  category ForumCategory @relation(fields: [categoryId], references: [id])
+  parent   ForumPost?  @relation("PostReplies", fields: [parentId], references: [id])
+  replies  ForumPost[] @relation("PostReplies")
+
+  @@map("forum_posts")
+}
+
+model ForumCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  icon        String   @default("💬")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  posts ForumPost[]
+
+  @@map("forum_categories")
+}
+
+model FeedEvent {
+  id         String        @id @default(uuid())
+  actorId    String        @map("actor_id")
+  eventType  FeedEventType @map("event_type")
+  entityType String        @map("entity_type")
+  entityId   String        @map("entity_id")
+  metadata   Json?
+  categories String[]
+  projectId  String?       @map("project_id")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  actor   User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@map("feed_events")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
   title     String
-  content   String
-  authorId  String
-  createdAt DateTime @default(now())
+  body      String
+  actionUrl String?          @map("action_url")
+  isRead    Boolean          @default(false) @map("is_read")
+  pushSent  Boolean          @default(false) @map("push_sent")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }
 
 model Report {
-  id          String   @id @default(uuid())
-  reporterId  String
-  reporter    User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  targetType  String   
-  targetId    String   
-  reason      String
-  severity    String   
-  status      String   
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  reporterId String   @map("reporter_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  reason     String
+  severity   String   @default("medium")
+  status     String   @default("pending")
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  reporter User @relation(fields: [reporterId], references: [id])
+
+  @@map("reports")
 }
 
-model ReportAuditLog { 
-  id        String   @id @default(uuid())
-  actorId   String   
-  ipAddress String?
-  action    String   
-  oldValues Json?    
-  newValues Json?    
-  createdAt DateTime @default(now())
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
 }
 
 model PushSubscription {
-  id        String   @id @default(uuid())
-  userId    String
-  endpoint  String   @unique
-  p256dh    String   
-  auth      String   
-  createdAt DateTime @default(now())
-}
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  endpoint   String
+  p256dhKey  String   @map("p256dh_key")
+  authKey    String   @map("auth_key")
+  deviceInfo Json?    @map("device_info")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-// ==========================================
-// npx prisma studio --port 5555
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
+}
