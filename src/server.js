@@ -104,6 +104,14 @@ app.use("/api",          messagesRouter);  // /api/conversations + /api/messages
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+// ── Route d'accueil et de Health Check pour UptimeRobot ──
+app.all("/", (req, res) => {
+  // Répond 200 OK à toutes les requêtes (GET, HEAD, etc.) sur la racine
+  res.status(200).json({ 
+    status: "success",
+    message: "Launchpad API is live and running cleanly!" 
+  });
+});
 
 // ── Démarrage ─────────────────────────────────────────────
 async function start() {
