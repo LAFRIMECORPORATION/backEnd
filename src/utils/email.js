@@ -171,3 +171,76 @@ export async function sendKycRejectedEmail(user, reason) {
     `,
   });
 }
+// ============================================================
+// LAUNCHPAD — email.kyc-additions.js
+// INSTRUCTION : Coller ces fonctions à la FIN de src/utils/email.js
+// ============================================================
+
+// ── Email : demande de documents supplémentaires ─────────
+export async function sendKycRequestDocsEmail(user, missingDocs, adminMessage) {
+  await sendEmail({
+    to:      user.email,
+    subject: "📋 Documents supplémentaires requis — Launchpad",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1E1B4B; padding: 32px; text-align: center; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0;">📋 Documents requis</h1>
+        </div>
+        <div style="background: white; padding: 40px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+          <h2 style="color: #1E1B4B;">Bonjour ${user.firstName},</h2>
+          <p style="color: #374151; line-height: 1.6;">
+            Notre équipe examine votre dossier KYC et a besoin de
+            documents supplémentaires pour finaliser la vérification.
+          </p>
+
+          <div style="background: #FFF8E1; border-left: 4px solid #F59E0B; padding: 16px; border-radius: 4px; margin: 20px 0;">
+            <strong style="color: #D97706;">Documents manquants :</strong>
+            <ul style="color: #374151; margin: 8px 0 0; padding-left: 20px;">
+              ${missingDocs.map(doc => `<li>${doc}</li>`).join("")}
+            </ul>
+          </div>
+
+          ${adminMessage ? `
+          <p style="color: #374151; font-style: italic; background: #F3F4F6; padding: 12px; border-radius: 6px;">
+            Message de notre équipe : "${adminMessage}"
+          </p>` : ""}
+
+          <a href="${process.env.FRONTEND_URL}/kyc-verification"
+             style="display: inline-block; background: #4F5FCF; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 16px;">
+            Compléter mon dossier →
+          </a>
+        </div>
+      </div>
+    `,
+  });
+}
+
+// ── Email : notification admin nouveau dossier KYC ───────
+export async function sendAdminKycNotification(admin, applicant) {
+  await sendEmail({
+    to:      admin.email,
+    subject: `🛡️ Nouveau dossier KYC — ${applicant.firstName} ${applicant.lastName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1E1B4B; padding: 24px; text-align: center; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 20px;">🛡️ Nouveau dossier KYC</h1>
+        </div>
+        <div style="background: white; padding: 32px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+          <p style="color: #374151;">Bonjour ${admin.firstName},</p>
+          <p style="color: #374151; line-height: 1.6;">
+            Un nouveau dossier KYC attend votre examen.
+          </p>
+          <div style="background: #F9FAFB; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <div style="margin-bottom: 8px;"><strong>Nom :</strong> ${applicant.firstName} ${applicant.lastName}</div>
+            <div style="margin-bottom: 8px;"><strong>Email :</strong> ${applicant.email}</div>
+            <div><strong>Rôle :</strong> ${applicant.role === "student" ? "Étudiant(e)" : "Investisseur"}</div>
+          </div>
+          <a href="${process.env.FRONTEND_URL}/admin"
+             style="display: inline-block; background: #1E1B4B; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+            Examiner le dossier →
+          </a>
+        </div>
+      </div>
+    `,
+  });
+}

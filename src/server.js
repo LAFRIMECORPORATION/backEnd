@@ -1,5 +1,5 @@
 // ============================================================
-// LAUNCHPAD — server.js  Phase 4 — avec Socket.io
+// LAUNCHPAD — server.js  Phase 4 — avec Socket.io & KYC Ready
 // ============================================================
 
 import "dotenv/config";
@@ -12,6 +12,7 @@ import { Server } from "socket.io";
 
 import { env }             from "./config/env.js";
 import { connectDatabase } from "./config/database.js";
+import prisma              from "./config/database.js"; // 🔐 Préservé : Instance globale Prisma
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { apiLimiter }      from "./middleware/rateLimiter.js";
 import { setupSocketIO }   from "./socket.js";
@@ -20,7 +21,6 @@ import { setupSocketIO }   from "./socket.js";
 import authRouter     from "./modules/auth/auth.router.js";
 import usersRouter    from "./modules/users/users.router.js";
 import kycRouter      from "./modules/kyc/kyc.router.js";
-import prisma from "./config/database.js"; // 👈 SANS les accolades car c'est un export default !
 import projectsRouter from "./modules/projects/projects.router.js";
 import messagesRouter from "./modules/messages/messages.router.js";
 
@@ -49,7 +49,7 @@ setupSocketIO(io);
 // ── Middleware Globaux ────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy:{ policy:"cross-origin" } }));
 
-// ── Configuration CORS ────────────────────────────────────
+// ── Configuration CORS Robuste (Vercel Prod + Local) ──────
 const allowedOrigins = [
   "https://launch-pad-eosin.vercel.app",        // Ton Frontend Vercel Production
   "http://localhost:5173",                      // Vite Local
@@ -123,6 +123,7 @@ app.all("/", async (req, res) => {
     });
   }
 });
+
 // ── Gestion des Erreurs ───────────────────────────────────
 app.use(notFoundHandler);
 app.use(errorHandler);

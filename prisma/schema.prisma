@@ -162,11 +162,41 @@ model User {
   reports              Report[]
   auditLogs            AuditLog[]
   pushSubscriptions    PushSubscription[]
+  kycDocuments KycDocument[]
+  kycFormData  KycFormData?
   refreshTokens        RefreshToken[]
   forumPosts           ForumPost[]
   academyEnrollments   AcademyEnrollment[]
 
   @@map("users")
+}
+
+model KycDocument {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  docType      String   @map("doc_type")   // "cni_file" | "selfie" | etc.
+  cloudinaryId String   @map("cloudinary_id")
+  status       String   @default("pending") // "pending" | "approved" | "rejected"
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kyc_documents")
+}
+
+model KycFormData {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  formData        Json     @map("form_data")       // Données texte du formulaire
+  rejectionReason String?  @map("rejection_reason")
+  requestedDocs   String[] @map("requested_docs")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kyc_form_data")
 }
 
 model UserProfile {
