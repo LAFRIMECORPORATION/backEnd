@@ -20,6 +20,7 @@ import { setupSocketIO }   from "./socket.js";
 import authRouter     from "./modules/auth/auth.router.js";
 import usersRouter    from "./modules/users/users.router.js";
 import kycRouter      from "./modules/kyc/kyc.router.js";
+import prisma from "./config/database.js"; // 👈 SANS les accolades car c'est un export default !
 import projectsRouter from "./modules/projects/projects.router.js";
 import messagesRouter from "./modules/messages/messages.router.js";
 
@@ -96,14 +97,32 @@ app.use("/api/projects", projectsRouter);
 app.use("/api",          messagesRouter);  // /api/conversations + /api/messages
 
 // ── Route d'accueil et de Health Check pour UptimeRobot ──
-// 🎯 PARFAIT ICI : Après les routes, mais AVANT le notFoundHandler !
-app.all("/", (req, res) => {
-  res.status(200).json({ 
-    status: "success",
-    message: "Launchpad API is live and running cleanly!" 
-  });
-});
+// 🔥 LA VERSION PRO : Ping de l'API + Réveil forcé de Neon
+app.all("/", async (req, res) => {
+  try {
+    // S'assure que la connexion à la base de données est initialisée
+    await connectDatabase(); 
+    
+    // Envoie une mini-requête SQL native ultra-légère (demande juste "1" à PostgreSQL)
+    // Cela force Neon à voir de l'activité toutes les 5 minutes et l'empêche de s'endormir
+    await prisma.$queryRaw`SELECT 1`; 
 
+    res.status(200).json({ 
+      status: "success",
+      message: "Launchpad API and Neon Database are live, warm and running cleanly!" 
+    });
+  } catch (error) {
+    console.error("⚠️ [Neon Cold Start] Erreur lors du réveil de la DB :", error.message);
+    
+    // On répond quand même un statut 200 à UptimeRobot. 
+    // Pour éviter que le moniteur passe au rouge pendant que Neon finit de se réveiller !
+    res.status(200).json({ 
+      status: "warning",
+      message: "API is live, but Database is warming up...",
+      error: error.message
+    });
+  }
+});
 // ── Gestion des Erreurs ───────────────────────────────────
 app.use(notFoundHandler);
 app.use(errorHandler);
