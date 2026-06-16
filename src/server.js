@@ -21,8 +21,9 @@ import authRouter     from "./modules/auth/auth.router.js";
 import usersRouter    from "./modules/users/users.router.js";
 import kycRouter      from "./modules/kyc/kyc.router.js";
 import projectsRouter from "./modules/projects/projects.router.js";
-import messagesRouter from "./modules/messages/messages.router.js";  // 🆕
+import messagesRouter from "./modules/messages/messages.router.js";
 
+// ── Initialisation de l'application ───────────────────────
 const app    = express();
 const server = createServer(app);  // HTTP server pour Socket.io
 
@@ -44,9 +45,10 @@ app.set("io", io);
 // Configurer les événements Socket.io
 setupSocketIO(io);
 
-// ── Middleware ────────────────────────────────────────────
+// ── Middleware Globaux ────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy:{ policy:"cross-origin" } }));
-// ── Liste des origines autorisées ─────────────────────────
+
+// ── Configuration CORS ────────────────────────────────────
 const allowedOrigins = [
   "https://launch-pad-eosin.vercel.app",        // Ton Frontend Vercel Production
   "http://localhost:5173",                      // Vite Local
@@ -56,7 +58,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Permet aux requêtes sans origine (comme Postman, ou les outils internes) de passer
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -69,14 +70,15 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true,
-  optionsSuccessStatus: 200 // Important pour les requêtes Preflight (OPTIONS) sur certains navigateurs
+  optionsSuccessStatus: 200
 }));
+
 app.use(express.json({ limit:"10mb" }));
 app.use(express.urlencoded({ extended:true, limit:"10mb" }));
 app.use(morgan(env.IS_PROD ? "combined" : "dev"));
 app.use("/api", apiLimiter);
 
-// ── Health ────────────────────────────────────────────────
+// ── Health (Route détaillée) ──────────────────────────────
 app.get("/health", (_req, res) => {
   res.status(200).json({
     status:"ok", environment:env.NODE_ENV,
@@ -93,25 +95,18 @@ app.use("/api/kyc",      kycRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api",          messagesRouter);  // /api/conversations + /api/messages
 
-// Phase 5+
-// app.use("/api/payments",       paymentsRouter);
-// app.use("/api/investments",    investmentsRouter);
-// app.use("/api/forum",          forumRouter);
-// app.use("/api/appointments",   appointmentsRouter);
-// app.use("/api/notifications",  notificationsRouter);
-// app.use("/api/feed",           feedRouter);
-// app.use("/api/admin",          adminRouter);
-
-app.use(notFoundHandler);
-app.use(errorHandler);
 // ── Route d'accueil et de Health Check pour UptimeRobot ──
+// 🎯 PARFAIT ICI : Après les routes, mais AVANT le notFoundHandler !
 app.all("/", (req, res) => {
-  // Répond 200 OK à toutes les requêtes (GET, HEAD, etc.) sur la racine
   res.status(200).json({ 
     status: "success",
     message: "Launchpad API is live and running cleanly!" 
   });
 });
+
+// ── Gestion des Erreurs ───────────────────────────────────
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // ── Démarrage ─────────────────────────────────────────────
 async function start() {
