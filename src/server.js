@@ -1,5 +1,5 @@
 // ============================================================
-// LAUNCHPAD — server.js  Phase 4 — avec Socket.io & KYC Ready
+// LAUNCHPAD — server.js  Phase 4 — avec Socket.io
 // ============================================================
 
 import "dotenv/config";
@@ -9,10 +9,8 @@ import cors       from "cors";
 import helmet     from "helmet";
 import morgan     from "morgan";
 import { Server } from "socket.io";
-
 import { env }             from "./config/env.js";
 import { connectDatabase } from "./config/database.js";
-import prisma              from "./config/database.js"; // 🔐 Préservé : Instance globale Prisma
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { apiLimiter }      from "./middleware/rateLimiter.js";
 import { setupSocketIO }   from "./socket.js";
@@ -20,7 +18,8 @@ import { setupSocketIO }   from "./socket.js";
 // ── Routers ───────────────────────────────────────────────
 import authRouter     from "./modules/auth/auth.router.js";
 import usersRouter    from "./modules/users/users.router.js";
-import kycRouter      from "./modules/kyc/kyc.router.js";
+import kycRouter      from "./modules/kyc/kyc.router.js"; // ✅ Importation unique et propre
+import prisma         from "./config/database.js"; 
 import projectsRouter from "./modules/projects/projects.router.js";
 import messagesRouter from "./modules/messages/messages.router.js";
 
@@ -34,10 +33,10 @@ const io = new Server(server, {
     origin: env.IS_PROD
       ? [env.FRONTEND_URL]
       : ["http://localhost:5173", "http://localhost:3000"],
-    methods: ["GET","POST"],
+    methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["websocket","polling"],
+  transports: ["websocket", "polling"],
 });
 
 // Rendre io accessible dans les routes (req.app.get("io"))
@@ -47,9 +46,9 @@ app.set("io", io);
 setupSocketIO(io);
 
 // ── Middleware Globaux ────────────────────────────────────
-app.use(helmet({ crossOriginResourcePolicy:{ policy:"cross-origin" } }));
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
-// ── Configuration CORS Robuste (Vercel Prod + Local) ──────
+// ── Configuration CORS ────────────────────────────────────
 const allowedOrigins = [
   "https://launch-pad-eosin.vercel.app",        // Ton Frontend Vercel Production
   "http://localhost:5173",                      // Vite Local
@@ -74,37 +73,40 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-app.use(express.json({ limit:"10mb" }));
-app.use(express.urlencoded({ extended:true, limit:"10mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(morgan(env.IS_PROD ? "combined" : "dev"));
 app.use("/api", apiLimiter);
 
 // ── Health (Route détaillée) ──────────────────────────────
 app.get("/health", (_req, res) => {
   res.status(200).json({
-    status:"ok", environment:env.NODE_ENV,
-    timestamp:new Date().toISOString(), version:"1.0.0",
-    phases:["auth","users","kyc","projects","messages"],
-    socketio:true,
+    status: "ok", 
+    environment: env.NODE_ENV,
+    timestamp: new Date().toISOString(), 
+    version: "1.0.0",
+    phases: ["auth", "users", "kyc", "projects", "messages"],
+    socketio: true,
   });
 });
 
 // ── Routes API ────────────────────────────────────────────
 app.use("/api/auth",     authRouter);
 app.use("/api/users",    usersRouter);
-app.use("/api/kyc",      kycRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api",          messagesRouter);  // /api/conversations + /api/messages
 
+// 🛡️ Application pro de l'Option B pour le module KYC (Zéro doublon, ultra modulaire)
+app.use("/api/kyc",       kycRouter);      // Endpoints utilisateurs (/submit, /status)
+app.use("/api/admin/kyc", kycRouter);      // Endpoints administration (/pending, /:userId/approve, etc.)
+
 // ── Route d'accueil et de Health Check pour UptimeRobot ──
-// 🔥 LA VERSION PRO : Ping de l'API + Réveil forcé de Neon
+// 🔥 Pinging API + Anti-mise en veille de la base Neon
 app.all("/", async (req, res) => {
   try {
-    // S'assure que la connexion à la base de données est initialisée
     await connectDatabase(); 
     
-    // Envoie une mini-requête SQL native ultra-légère (demande juste "1" à PostgreSQL)
-    // Cela force Neon à voir de l'activité toutes les 5 minutes et l'empêche de s'endormir
+    // Requête native légère pour forcer l'activité de PostgreSQL toutes les 5 minutes
     await prisma.$queryRaw`SELECT 1`; 
 
     res.status(200).json({ 
@@ -114,8 +116,7 @@ app.all("/", async (req, res) => {
   } catch (error) {
     console.error("⚠️ [Neon Cold Start] Erreur lors du réveil de la DB :", error.message);
     
-    // On répond quand même un statut 200 à UptimeRobot. 
-    // Pour éviter que le moniteur passe au rouge pendant que Neon finit de se réveiller !
+    // Statut 200 renvoyé volontairement pour éviter que UptimeRobot ne panique pendant le préchauffage de Neon
     res.status(200).json({ 
       status: "warning",
       message: "API is live, but Database is warming up...",
@@ -149,4 +150,5 @@ async function start() {
 }
 
 start();
+
 export default app;

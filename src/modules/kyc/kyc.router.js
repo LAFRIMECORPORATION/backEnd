@@ -1,18 +1,10 @@
 // ============================================================
 // LAUNCHPAD — kyc/kyc.router.js
-// Routes du module KYC
+// Routes du module KYC — Version Modulaire (Option B)
 //
-// Routes utilisateur :
-//   POST /api/kyc/submit
-//   GET  /api/kyc/status
-//
-// Routes admin :
-//   GET  /api/admin/kyc/stats
-//   GET  /api/admin/kyc/pending
-//   GET  /api/admin/kyc/:userId
-//   PUT  /api/admin/kyc/:userId/approve
-//   PUT  /api/admin/kyc/:userId/reject
-//   POST /api/admin/kyc/:userId/request-docs
+// Montage recommandé dans le serveur principal :
+//   app.use("/api/kyc", kycRouter);
+//   app.use("/api/admin/kyc", kycRouter);
 // ============================================================
 
 import { Router } from "express";
@@ -27,7 +19,6 @@ import { AppError } from "../../middleware/errorHandler.js";
 const router = Router();
 
 // ── Configuration Multer pour les documents KYC ──────────
-// Stockage en mémoire → on envoie le buffer à Cloudinary
 const ACCEPTED_TYPES = [
   "image/jpeg", "image/jpg", "image/png", "image/webp",
   "application/pdf",
@@ -52,22 +43,20 @@ const kycUpload = multer({
   },
 });
 
-// Champs attendus selon le rôle (le router accepte tous,
-// le service vérifie les requis selon le rôle)
 const kycFields = kycUpload.fields([
   // Étudiant
-  { name: "cni_file",   maxCount: 1 },
-  { name: "selfie",     maxCount: 1 },
-  { name: "certif_scol",maxCount: 1 },
-  { name: "carte_etu",  maxCount: 1 },
+  { name: "cni_file",    maxCount: 1 },
+  { name: "selfie",      maxCount: 1 },
+  { name: "certif_scol", maxCount: 1 },
+  { name: "carte_etu",   maxCount: 1 },
   // Investisseur
-  { name: "rep_cni_file",maxCount: 1 },
+  { name: "rep_cni_file", maxCount: 1 },
   { name: "domicile",    maxCount: 1 },
   { name: "rccm_file",   maxCount: 1 },
 ]);
 
 // ════════════════════════════════════════════════════════════
-// ROUTES UTILISATEUR
+// 1. ENDPOINTS UTILISATEURS (Accessibles via /api/kyc/*)
 // ════════════════════════════════════════════════════════════
 
 // POST /api/kyc/submit — Soumettre son dossier KYC
@@ -85,47 +74,47 @@ router.get("/status",
 );
 
 // ════════════════════════════════════════════════════════════
-// ROUTES ADMIN
+// 2. ENDPOINTS ADMIN (Accessibles via /api/admin/kyc/*)
 // ════════════════════════════════════════════════════════════
 
 // GET /api/admin/kyc/stats — Statistiques globales KYC
-router.get("/admin/stats",
+router.get("/stats",
   authenticate,
   requireRole("admin"),
   controller.getKycStats
 );
 
 // GET /api/admin/kyc/pending — Dossiers en attente
-router.get("/admin/pending",
+router.get("/pending",
   authenticate,
   requireRole("admin"),
   controller.listPendingKyc
 );
 
 // GET /api/admin/kyc/:userId — Détail d'un dossier
-router.get("/admin/:userId",
+router.get("/:userId",
   authenticate,
   requireRole("admin"),
   controller.getKycDetail
 );
 
-// PUT /api/admin/kyc/:userId/approve — Approuver
-router.put("/admin/:userId/approve",
+// PUT /api/admin/kyc/:userId/approve — Approuver un dossier
+router.put("/:userId/approve",
   authenticate,
   requireRole("admin"),
   controller.approveKyc
 );
 
-// PUT /api/admin/kyc/:userId/reject — Rejeter
-router.put("/admin/:userId/reject",
+// PUT /api/admin/kyc/:userId/reject — Rejeter un dossier
+router.put("/:userId/reject",
   authenticate,
   requireRole("admin"),
   validate(rejectKycSchema),
   controller.rejectKyc
 );
 
-// POST /api/admin/kyc/:userId/request-docs — Demander docs supplémentaires
-router.post("/admin/:userId/request-docs",
+// POST /api/admin/kyc/:userId/request-docs — Demander des pièces complémentaires
+router.post("/:userId/request-docs",
   authenticate,
   requireRole("admin"),
   validate(requestDocsSchema),
