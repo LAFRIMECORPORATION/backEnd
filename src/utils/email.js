@@ -244,3 +244,73 @@ export async function sendAdminKycNotification(admin, applicant) {
     `,
   });
 }
+// ============================================================
+// INSTRUCTION : Coller ces fonctions à la FIN de src/utils/email.js
+// ============================================================
+
+export async function sendAdminNewProjectEmail(admin, project) {
+  await sendEmail({
+    to: admin.email,
+    subject: `📦 Nouveau projet à valider — ${project.title}`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#1E1B4B;padding:24px;text-align:center;border-radius:12px 12px 0 0">
+        <h1 style="color:white;margin:0;font-size:20px">📦 Nouveau projet à valider</h1>
+      </div>
+      <div style="background:white;padding:32px;border:1px solid #e5e7eb;border-radius:0 0 12px 12px">
+        <p>Bonjour ${admin.firstName},</p>
+        <div style="background:#F9FAFB;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0">
+          <div><strong>Projet :</strong> ${project.title}</div>
+          <div><strong>Auteur :</strong> ${project.author?.firstName || ""}</div>
+          <div><strong>Catégorie :</strong> ${project.category}</div>
+        </div>
+        <a href="${process.env.FRONTEND_URL}/admin"
+           style="display:inline-block;background:#1E1B4B;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">
+          Examiner →
+        </a>
+      </div>
+    </div>`,
+  });
+}
+
+export async function sendProjectPublishedEmail(user, project) {
+  await sendEmail({
+    to: user.email,
+    subject: `✅ Votre projet "${project.title}" est en ligne !`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:linear-gradient(135deg,#059669,#10B981);padding:32px;text-align:center;border-radius:12px 12px 0 0">
+        <h1 style="color:white;margin:0">✅ Projet publié !</h1>
+      </div>
+      <div style="background:white;padding:32px;border:1px solid #e5e7eb;border-radius:0 0 12px 12px">
+        <h2>Félicitations ${user.firstName} !</h2>
+        <p>Votre projet <strong>"${project.title}"</strong> est maintenant visible par les investisseurs.</p>
+        <a href="${process.env.FRONTEND_URL}"
+           style="display:inline-block;background:#4F5FCF;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold">
+          Voir mon projet →
+        </a>
+      </div>
+    </div>`,
+  });
+}
+
+export async function sendProjectRejectedEmail(user, project, reason) {
+  await sendEmail({
+    to: user.email,
+    subject: `❌ Projet "${project.title}" — Modifications requises`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#DC2626;padding:32px;text-align:center;border-radius:12px 12px 0 0">
+        <h1 style="color:white;margin:0">❌ Projet refusé</h1>
+      </div>
+      <div style="background:white;padding:32px;border:1px solid #e5e7eb;border-radius:0 0 12px 12px">
+        <h2>Bonjour ${user.firstName},</h2>
+        <p>Votre projet <strong>"${project.title}"</strong> n'a pas pu être publié :</p>
+        <div style="background:#FEF2F2;border-left:4px solid #DC2626;padding:16px;border-radius:4px;margin:16px 0">
+          ${reason}
+        </div>
+        <a href="${process.env.FRONTEND_URL}/publish"
+           style="display:inline-block;background:#4F5FCF;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold">
+          Modifier mon projet →
+        </a>
+      </div>
+    </div>`,
+  });
+}
