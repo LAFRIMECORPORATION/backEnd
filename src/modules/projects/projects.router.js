@@ -57,8 +57,9 @@ router.post("/:id/cover",    authenticate, requireRole("student","admin"), requi
 router.post("/:id/publish",  authenticate, requireRole("student"), requireKyc, controller.publishProject);
 router.put("/:id",           authenticate, requireRole("student","admin"), validate(updateProjectSchema), controller.updateProject);
 router.delete("/:id",        authenticate, requireRole("student","admin"), controller.deleteProject);
-router.post("/:id/like",     authenticate, controller.toggleLike);
-router.post("/:id/save",     authenticate, controller.toggleSave);
-router.post("/:id/comments", authenticate, validate(commentSchema), controller.addComment);
+router.post("/:id/like",           authenticate, controller.toggleLike);
+router.post("/:id/save",           authenticate, controller.toggleSave);
+router.post("/:id/comments",       authenticate, validate(commentSchema), controller.addComment);
+router.post("/:id/comments/:commentId/like", authenticate, controller.toggleCommentLike);
 
 export default router;

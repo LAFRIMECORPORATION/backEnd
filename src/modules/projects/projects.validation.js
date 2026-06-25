@@ -26,6 +26,9 @@ const toIntPreprocess = (val) => {
   return val;
 };
 
+// Helper pour transformer les chaînes vides en undefined (évite les plantages de contraintes)
+const emptyToUndefined = (val) => (val === "" || (typeof val === "string" && val.trim() === "") ? undefined : val);
+
 // ── Création / Mise à jour d'un projet ────────────────────
 export const createProjectSchema = z.object({
   title: z
@@ -50,9 +53,9 @@ export const createProjectSchema = z.object({
     .max(5000,"La description ne doit pas dépasser 5000 caractères.")
     .trim(),
 
-  problem: z.string().max(2000).optional(),
-  solution: z.string().max(2000).optional(),
-  businessModel: z.string().max(2000).optional(),
+  problem: z.preprocess(emptyToUndefined, z.string().max(2000).optional()),
+  solution: z.preprocess(emptyToUndefined, z.string().max(2000).optional()),
+  businessModel: z.preprocess(emptyToUndefined, z.string().max(2000).optional()),
 
   // 🛡️ Gère les majuscules envoyées par le front (ex: "IDEA" -> "idea")
   stage: z.preprocess(
@@ -99,8 +102,8 @@ export const createProjectSchema = z.object({
     .max(8, "Maximum 8 tags.")
     .default([]),
 
-  githubUrl: z.string().url("URL GitHub invalide.").optional().or(z.literal("")),
-  demoVideoUrl: z.string().url("URL vidéo invalide.").optional().or(z.literal("")),
+  githubUrl: z.preprocess(emptyToUndefined, z.string().url("URL GitHub invalide.").optional()),
+  demoVideoUrl: z.preprocess(emptyToUndefined, z.string().url("URL vidéo invalide.").optional()),
 
   // 🛡️ Convertit les chaînes d'entiers si nécessaire
   teamSize: z.preprocess(
@@ -117,15 +120,28 @@ export const createProjectSchema = z.object({
 // Mise à jour partielle (tous les champs optionnels)
 export const updateProjectSchema = createProjectSchema.partial();
 
-// ── Commentaire ───────────────────────────────────────────
-export const commentSchema = z.object({
-  content: z
-    .string({ required_error: "Le contenu du commentaire est requis." })
-    .min(2,  "Le commentaire doit contenir au moins 2 caractères.")
-    .max(1000,"Le commentaire ne doit pas dépasser 1000 caractères.")
-    .trim(),
-  parentId: z.string().uuid().optional(),
-});
+// ── Commentaire (Version Multi-Format Sécurisée) ───────────
+export const commentSchema = z.preprocess(
+  (data) => {
+    if (data && typeof data === "object") {
+      // 🛡️ FIX : Création d'une copie pour éviter la mutation interdite par Zod
+      const updatedData = { ...data };
+      if (!updatedData.content && updatedData.text) {
+        updatedData.content = updatedData.text;
+      }
+      return updatedData;
+    }
+    return data;
+  },
+  z.object({
+    content: z
+      .string({ required_error: "Le contenu du commentaire est requis." })
+      .min(2,  "Le commentaire doit contenir au moins 2 caractères.")
+      .max(1000,"Le commentaire ne doit pas dépasser 1000 caractères.")
+      .trim(),
+    parentId: z.preprocess(emptyToUndefined, z.string().uuid("ID parent invalide (doit être un UUID).").optional()),
+  })
+);
 
 // ── Rejet admin ───────────────────────────────────────────
 export const adminRejectSchema = z.object({
@@ -137,7 +153,7 @@ export const adminRejectSchema = z.object({
 
 // ── Approbation admin ─────────────────────────────────────
 export const adminApproveSchema = z.object({
-  note: z.string().max(500).optional(),
+  note: z.preprocess(emptyToUndefined, z.string().max(500).optional()),
   featured: z.boolean().optional(),
 });
 
@@ -154,7 +170,7 @@ export const listProjectsQuerySchema = z.object({
   status:    z.preprocess(toLowerPreprocess, z.enum(["draft", "pending", "active", "funded", "expired", "rejected"]).optional()),
 });
 
-// ── Middleware de validation ──────────────────────────────
+// ── Middleware de validation body ──────────────────────────────
 export function validate(schema) {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);
@@ -170,7 +186,7 @@ export function validate(schema) {
         errors,
       });
     }
-    req.body = result.data; // Récupère les données nettoyées et transformées par preprocess
+    req.body = result.data;
     next();
   };
 }
@@ -191,7 +207,7 @@ export function validateQuery(schema) {
         errors,
       });
     }
-    req.query = result.data; // Récupère les données query nettoyées
+    req.query = result.data;
     next();
   };
 }

@@ -10,11 +10,7 @@ import { AppError } from "../../middleware/errorHandler.js";
 // ── POST /api/projects ────────────────────────────────────
 export async function createProject(req, res, next) {
   try {
-    // 🛡️ Sécurité Anti-Casse pour correspondre aux enums minuscules de Prisma
-    if (req.body.stage) req.body.stage = req.body.stage.toLowerCase();
-    if (req.body.status) req.body.status = req.body.status.toLowerCase();
-    if (req.body.equityType) req.body.equityType = req.body.equityType.toLowerCase();
-
+    // 🛡️ Nettoyage manuel supprimé : Zod gère déjà le toLowerPreprocess en toute sécurité
     const project = await projectsService.createProject(req.user.id, req.body);
     return created(res, { project }, "Projet créé en brouillon.");
   } catch (error) { next(error); }
@@ -49,12 +45,12 @@ export async function listProjects(req, res, next) {
       page, 
       limit, 
       category, 
-      stage: stage ? stage.toLowerCase() : undefined, // 🛡️ Normalisation
+      stage, // Déjà géré par Zod validateQuery
       minGoal, 
       maxGoal, 
       search, 
       sort, 
-      status: status ? status.toLowerCase() : undefined, // 🛡️ Normalisation
+      status, // Déjà géré par Zod validateQuery
     });
     return paginated(res, { data: projects, page, limit, total });
   } catch (error) { next(error); }
@@ -74,9 +70,14 @@ export async function listMyProjects(req, res, next) {
 // ── GET /api/projects/:id ─────────────────────────────────
 export async function getProjectById(req, res, next) {
   try {
-    const project = await projectsService.getProjectById(
-      req.params.id, req.user?.id
-    );
+    const targetId = req.params.id;
+
+    // 🛡️ SÉCURITÉ DOUBLES ROUTES : Évite que le mot-clé "pending" de l'admin soit traité comme un ID de projet
+    if (targetId === "pending") {
+      return next(); 
+    }
+
+    const project = await projectsService.getProjectById(targetId, req.user?.id);
     return success(res, { project });
   } catch (error) { next(error); }
 }
@@ -84,11 +85,7 @@ export async function getProjectById(req, res, next) {
 // ── PUT /api/projects/:id ─────────────────────────────────
 export async function updateProject(req, res, next) {
   try {
-    // 🛡️ Sécurité Anti-Casse lors des modifications de projets
-    if (req.body.stage) req.body.stage = req.body.stage.toLowerCase();
-    if (req.body.status) req.body.status = req.body.status.toLowerCase();
-    if (req.body.equityType) req.body.equityType = req.body.equityType.toLowerCase();
-
+    // 🛡️ Nettoyage manuel supprimé pour éviter les crashs sur valeurs Optionnelles undefined
     const project = await projectsService.updateProject(
       req.params.id, req.user.id, req.body, req.user.role
     );
@@ -109,8 +106,19 @@ export async function deleteProject(req, res, next) {
 // ── POST /api/projects/:id/like ───────────────────────────
 export async function toggleLike(req, res, next) {
   try {
-    const result = await projectsService.toggleLike(req.params.id, req.user.id);
-    return success(res, result);
+    const targetId = req.params.id;
+    if (!targetId || targetId === "undefined") {
+      throw new AppError("Identifiant de projet manquant ou invalide.", 400, "INVALID_PROJECT_ID");
+    }
+
+    const result = await projectsService.toggleLike(targetId, req.user.id);
+    
+    return success(res, {
+      id: targetId,
+      likesCount: result.likesCount ?? result.likes ?? 0,
+      likedByMe: result.likedByMe ?? false,
+      ...result
+    });
   } catch (error) { next(error); }
 }
 
@@ -125,10 +133,18 @@ export async function toggleSave(req, res, next) {
 // ── POST /api/projects/:id/comments ──────────────────────
 export async function addComment(req, res, next) {
   try {
-    const comment = await projectsService.addComment(
-      req.params.id, req.user.id, req.body
-    );
-    return created(res, { comment }, "Commentaire ajouté.");
+    const targetId = req.params.id;
+    if (!targetId || targetId === "undefined") {
+      throw new AppError("Identifiant de projet manquant pour le commentaire.", 400, "INVALID_PROJECT_ID");
+    }
+
+    // 🛡️ req.body est déjà nettoyé, restructuré et validé par commentSchema de Zod
+    const comment = await projectsService.addComment(targetId, req.user.id, req.body);
+    
+    return created(res, { 
+      comment,
+      data: comment 
+    }, "Commentaire ajouté.");
   } catch (error) { next(error); }
 }
 
@@ -177,5 +193,24 @@ export async function listPendingProjects(req, res, next) {
     const { page, limit } = getPagination(req.query);
     const { projects, total } = await projectsService.listPendingProjects({ page, limit });
     return paginated(res, { data: projects, page, limit, total });
+  } catch (error) { next(error); }
+}
+
+// ── POST /api/projects/:id/comments/:commentId/like ───────
+export async function toggleCommentLike(req, res, next) {
+  try {
+    const commentId = req.params.commentId;
+    if (!commentId || commentId === "undefined") {
+      throw new AppError("Identifiant de commentaire manquant ou invalide.", 400, "INVALID_COMMENT_ID");
+    }
+
+    const result = await projectsService.toggleCommentLike(commentId, req.user.id);
+    
+    return success(res, {
+      id: commentId,
+      likesCount: result.likesCount ?? 0,
+      likedByMe: result.likedByMe ?? false,
+      ...result
+    });
   } catch (error) { next(error); }
 }

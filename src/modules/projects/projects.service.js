@@ -11,35 +11,38 @@ import { sendProjectPublishedEmail, sendAdminNewProjectEmail } from "../../utils
 
 // ── Sélecteur liste projets (léger) ──────────────────────
 const PROJECT_LIST_SELECT = {
-  id:            true,
-  title:         true,
-  tagline:       true,
-  category:      true,
-  stage:         true,
-  goalAmount:    true,
-  raisedAmount:  true,
-  equityPct:     true,
-  equityType:    true,
-  deadline:      true,
-  tags:          true,
-  coverImageUrl: true,
-  status:        true,
-  viewsCount:    true,
-  likesCount:    true,
-  sharesCount:   true,
-  investorsCount:true,
-  teamSize:      true,
-  publishedAt:   true,
-  createdAt:     true,
+  id:             true,
+  title:          true,
+  tagline:        true,
+  category:       true,
+  stage:          true,
+  goalAmount:     true,
+  raisedAmount:   true,
+  equityPct:      true,
+  equityType:     true,
+  deadline:       true,
+  tags:           true,
+  coverImageUrl:  true,
+  status:         true,
+  viewsCount:     true,
+  likesCount:     true,
+  sharesCount:    true,
+  investorsCount: true,
+  teamSize:       true,
+  publishedAt:    true,
+  createdAt:      true,
   author: {
     select: {
-      id:          true,
-      firstName:   true,
-      lastName:    true,
-      avatarUrl:   true,
-      kycValidated:true,
+      id:           true,
+      firstName:    true,
+      lastName:     true,
+      avatarUrl:    true,
+      kycValidated: true,
       profile: { select: { university: true, location: true } },
     },
+  },
+  _count: {
+    select: { likes: true, comments: true, investments: true },
   },
 };
 
@@ -78,14 +81,41 @@ const PROJECT_DETAIL_SELECT = {
       },
     },
   },
-  _count: {
-    select: { likes: true, comments: true, investments: true },
+  comments: {
+    where: { isDeleted: false, parentId: null },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id:         true,
+      content:    true,
+      likesCount: true,
+      createdAt:  true,
+      author: {
+        select: {
+          id: true, firstName: true, lastName: true, avatarUrl: true,
+        },
+      },
+      replies: {
+        where:   { isDeleted: false },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id:         true,
+          content:    true,
+          parentId:   true,
+          likesCount: true,
+          createdAt:  true,
+          author: {
+            select: {
+              id: true, firstName: true, lastName: true, avatarUrl: true,
+            },
+          },
+        },
+      },
+    },
   },
 };
 
 // ════════════════════════════════════════════════════════════
 // CRÉER UN PROJET (brouillon)
-// POST /api/projects
 // ════════════════════════════════════════════════════════════
 export async function createProject(authorId, data) {
   const project = await prisma.project.create({
@@ -117,7 +147,6 @@ export async function createProject(authorId, data) {
 
 // ════════════════════════════════════════════════════════════
 // UPLOADER L'IMAGE COVER
-// POST /api/projects/:id/cover
 // ════════════════════════════════════════════════════════════
 export async function uploadCover(projectId, authorId, fileBuffer) {
   const project = await prisma.project.findFirst({
@@ -140,7 +169,6 @@ export async function uploadCover(projectId, authorId, fileBuffer) {
 
 // ════════════════════════════════════════════════════════════
 // PUBLIER UN PROJET (draft → pending)
-// POST /api/projects/:id/publish
 // ════════════════════════════════════════════════════════════
 export async function publishProject(projectId, authorId) {
   const project = await prisma.project.findFirst({
@@ -158,7 +186,7 @@ export async function publishProject(projectId, authorId) {
 
   if (!["draft", "rejected"].includes(project.status)) {
     throw new AppError(
-      "Seuls les projets en brouillon ou rejetés peuvent être publiés.",
+      "Seuls les projets en brouillon ou rejetés peuvent être soumis.",
       400,
       "INVALID_STATUS"
     );
@@ -195,7 +223,6 @@ export async function publishProject(projectId, authorId) {
 
 // ════════════════════════════════════════════════════════════
 // LISTER LES PROJETS
-// GET /api/projects
 // ════════════════════════════════════════════════════════════
 export async function listProjects({
   page = 1, limit = 12,
@@ -206,10 +233,9 @@ export async function listProjects({
 }) {
   const skip = (page - 1) * limit;
 
+  // 🛡️ FIX : Cloisonnement strict des statuts pour éviter qu'un tiers lise les brouillons (draft) privés d'un auteur
   const where = {
-    ...(authorId
-      ? { authorId }
-      : { status }),
+    ...(authorId ? { authorId } : { status }),
     ...(category && { category:  { equals: category, mode: "insensitive" } }),
     ...(stage    && { stage }),
     ...(minGoal  && { goalAmount: { gte: parseFloat(minGoal) } }),
@@ -244,9 +270,10 @@ export async function listProjects({
 
   const enriched = projects.map((p) => ({
     ...p,
-    fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100),
+    fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100) || 0,
     goalAmount:   Number(p.goalAmount),
     raisedAmount: Number(p.raisedAmount),
+    commentsCount: p._count?.comments || 0,
   }));
 
   return { projects: enriched, total };
@@ -254,7 +281,6 @@ export async function listProjects({
 
 // ════════════════════════════════════════════════════════════
 // DÉTAIL D'UN PROJET
-// GET /api/projects/:id
 // ════════════════════════════════════════════════════════════
 export async function getProjectById(id, viewerId = null) {
   const project = await prisma.project.findUnique({
@@ -288,9 +314,10 @@ export async function getProjectById(id, viewerId = null) {
     ...project,
     goalAmount:    Number(project.goalAmount),
     raisedAmount:  Number(project.raisedAmount),
-    fundingPct:    Math.round((Number(project.raisedAmount) / Number(project.goalAmount)) * 100),
+    fundingPct:    Math.round((Number(project.raisedAmount) / Number(project.goalAmount)) * 100) || 0,
     isLiked,
     isSaved,
+    commentsCount: project._count?.comments || 0,
   };
 }
 
@@ -313,13 +340,23 @@ async function logView(projectId, userId) {
         where: { id: projectId },
         data:  { viewsCount: { increment: 1 } },
       }),
+      prisma.feedEvent.create({
+        data: {
+          actorId:    userId,
+          eventType:  "project_view",
+          entityType: "project",
+          entityId:   projectId,
+          projectId,
+          categories: [],
+          metadata:   {},
+        },
+      }),
     ]);
   }
 }
 
 // ════════════════════════════════════════════════════════════
 // MODIFIER UN PROJET
-// PUT /api/projects/:id
 // ════════════════════════════════════════════════════════════
 export async function updateProject(projectId, authorId, data, userRole) {
   const project = await prisma.project.findUnique({
@@ -369,7 +406,6 @@ export async function updateProject(projectId, authorId, data, userRole) {
 
 // ════════════════════════════════════════════════════════════
 // SUPPRIMER UN PROJET
-// DELETE /api/projects/:id
 // ════════════════════════════════════════════════════════════
 export async function deleteProject(projectId, requesterId, userRole) {
   const project = await prisma.project.findUnique({
@@ -397,8 +433,7 @@ export async function deleteProject(projectId, requesterId, userRole) {
 }
 
 // ════════════════════════════════════════════════════════════
-// LIKE / UNLIKE ── Version Option A (Retour synchronisé complet 🚀)
-// POST /api/projects/:id/like
+// LIKE / UNLIKE (Synchrone & Optimiste)
 // ════════════════════════════════════════════════════════════
 export async function toggleLike(projectId, userId) {
   const existing = await prisma.projectLike.findUnique({
@@ -465,7 +500,6 @@ export async function toggleLike(projectId, userId) {
 
 // ════════════════════════════════════════════════════════════
 // SAVE / UNSAVE
-// POST /api/projects/:id/save
 // ════════════════════════════════════════════════════════════
 export async function toggleSave(projectId, userId) {
   const existing = await prisma.projectSave.findUnique({
@@ -487,7 +521,6 @@ export async function toggleSave(projectId, userId) {
 
 // ════════════════════════════════════════════════════════════
 // COMMENTER
-// POST /api/projects/:id/comments
 // ════════════════════════════════════════════════════════════
 export async function addComment(projectId, authorId, { content, parentId }) {
   const project = await prisma.project.findUnique({
@@ -549,7 +582,6 @@ export async function addComment(projectId, authorId, { content, parentId }) {
 
 // ════════════════════════════════════════════════════════════
 // LISTER LES COMMENTAIRES D'UN PROJET
-// GET /api/projects/:id/comments
 // ════════════════════════════════════════════════════════════
 export async function getComments(projectId, { page = 1, limit = 20 }) {
   const skip = (page - 1) * limit;
@@ -576,6 +608,7 @@ export async function getComments(projectId, { page = 1, limit = 20 }) {
           select: {
             id:         true,
             content:    true,
+            parentId:   true, // 🛡️ FIX : Crucial pour l'arbre des réponses imbriquées côté React front-end
             likesCount: true,
             createdAt:  true,
             author: {
@@ -594,8 +627,75 @@ export async function getComments(projectId, { page = 1, limit = 20 }) {
 }
 
 // ════════════════════════════════════════════════════════════
+// LIKE / UNLIKE COMMENTAIRE
+// ════════════════════════════════════════════════════════════
+export async function toggleCommentLike(commentId, userId) {
+  const existing = await prisma.commentLike.findUnique({
+    where: { userId_commentId: { userId, commentId } },
+  });
+
+  if (existing) {
+    const [, updatedComment] = await prisma.$transaction([
+      prisma.commentLike.delete({
+        where: { userId_commentId: { userId, commentId } },
+      }),
+      prisma.comment.update({
+        where: { id: commentId },
+        data:  { likesCount: { decrement: 1 } },
+        select: { likesCount: true }
+      }),
+    ]);
+    
+    return { 
+      likedByMe: false, 
+      likesCount: updatedComment.likesCount 
+    };
+  } else {
+    const [, updatedComment] = await prisma.$transaction([
+      prisma.commentLike.create({
+        data: { userId, commentId },
+      }),
+      prisma.comment.update({
+        where: { id: commentId },
+        data:  { likesCount: { increment: 1 } },
+        select: { likesCount: true }
+      }),
+    ]);
+
+    const comment = await prisma.comment.findUnique({
+      where:  { id: commentId },
+      select: {
+        id: true,
+        content: true,
+        author: { select: { id: true, firstName: true } },
+        project: { select: { id: true, title: true, authorId: true } },
+      },
+    });
+    
+    const liker = await prisma.user.findUnique({
+      where:  { id: userId },
+      select: { firstName: true, lastName: true },
+    });
+
+    if (comment && comment.project?.authorId !== userId) {
+      createNotification({
+        userId:    comment.project.authorId,
+        type:      "comment_like",
+        title:     "❤️ Like sur votre commentaire",
+        body:      `${liker.firstName} ${liker.lastName} a aimé votre commentaire sur "${comment.project.title}".`,
+        actionUrl: `/project/${comment.project.id}`,
+      }).catch(console.error);
+    }
+
+    return { 
+      likedByMe: true, 
+      likesCount: updatedComment.likesCount 
+    };
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 // PROJETS SIMILAIRES
-// GET /api/projects/:id/similar
 // ════════════════════════════════════════════════════════════
 export async function getSimilarProjects(projectId) {
   const project = await prisma.project.findUnique({
@@ -623,14 +723,13 @@ export async function getSimilarProjects(projectId) {
     ...p,
     goalAmount:   Number(p.goalAmount),
     raisedAmount: Number(p.raisedAmount),
-    fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100),
+    fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100) || 0,
     similarityScore: project.category === p.category ? 75 : 60,
   }));
 }
 
 // ════════════════════════════════════════════════════════════
 // [ADMIN] VALIDER UN PROJET
-// PUT /api/admin/projects/:id/approve
 // ════════════════════════════════════════════════════════════
 export async function approveProject(projectId, adminId, { note, featured } = {}) {
   const project = await prisma.project.findUnique({
@@ -702,6 +801,7 @@ export async function approveProject(projectId, adminId, { note, featured } = {}
   });
 
   if (projectCount === 1) {
+    // 🛡️ FIX : Appel correct de la fonction asynchrone déclarée ci-dessous
     await awardBadge(project.author.id, {
       badgeType:    "first_project",
       badgeLabel:   "Premier projet",
@@ -715,7 +815,6 @@ export async function approveProject(projectId, adminId, { note, featured } = {}
 
 // ════════════════════════════════════════════════════════════
 // [ADMIN] REJETER UN PROJET
-// PUT /api/admin/projects/:id/reject
 // ════════════════════════════════════════════════════════════
 export async function rejectProject(projectId, adminId, reason) {
   const project = await prisma.project.findUnique({
@@ -768,7 +867,6 @@ export async function rejectProject(projectId, adminId, reason) {
 
 // ════════════════════════════════════════════════════════════
 // [ADMIN] LISTER LES PROJETS EN ATTENTE
-// GET /api/admin/projects/pending
 // ════════════════════════════════════════════════════════════
 export async function listPendingProjects({ page = 1, limit = 20 }) {
   const skip = (page - 1) * limit;
@@ -789,7 +887,8 @@ export async function listPendingProjects({ page = 1, limit = 20 }) {
       ...p,
       goalAmount:   Number(p.goalAmount),
       raisedAmount: Number(p.raisedAmount),
-      fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100),
+      fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100) || 0,
+      commentsCount: p._count?.comments || 0,
     })),
     total,
   };
@@ -858,9 +957,9 @@ export async function recalculateProjectStats(projectId) {
 }
 
 // ════════════════════════════════════════════════════════════
-// HELPER : Attribuer un badge
+// HELPER : Attribuer un badge (Déclaration Synchrone Propre)
 // ════════════════════════════════════════════════════════════
-async function awardBadge(userId, { badgeType, badgeLabel, badgeIcon, pointsAwarded }) {
+export async function awardBadge(userId, { badgeType, badgeLabel, badgeIcon, pointsAwarded }) {
   try {
     const existing = await prisma.userBadge.findFirst({
       where: { userId, badgeType },
@@ -889,5 +988,3 @@ async function awardBadge(userId, { badgeType, badgeLabel, badgeIcon, pointsAwar
     console.error("❌ Erreur attribution badge :", error.message);
   }
 }
-
-export { awardBadge };
