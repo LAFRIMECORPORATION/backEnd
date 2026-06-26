@@ -104,6 +104,7 @@ enum NotificationType {
 enum FeedEventType {
   project_published
   project_funded
+  project_view
   collaboration_formed
   badge_earned
   marketplace_posted
