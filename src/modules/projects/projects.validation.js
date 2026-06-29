@@ -168,6 +168,7 @@ export const listProjectsQuerySchema = z.object({
   search:    z.string().max(100).optional(),
   sort:      z.preprocess(toLowerPreprocess, z.enum(["recent", "popular", "funded", "deadline"]).optional()),
   status:    z.preprocess(toLowerPreprocess, z.enum(["draft", "pending", "active", "funded", "expired", "rejected"]).optional()),
+  authorId:  z.string().uuid("ID auteur invalide (doit être un UUID).").optional(),
 });
 
 // ── Middleware de validation body ──────────────────────────────

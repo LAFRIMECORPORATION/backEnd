@@ -39,7 +39,7 @@ export async function publishProject(req, res, next) {
 export async function listProjects(req, res, next) {
   try {
     const { page, limit } = getPagination(req.query);
-    const { category, stage, minGoal, maxGoal, search, sort, status } = req.query;
+    const { category, stage, minGoal, maxGoal, search, sort, status, authorId } = req.query;
     
     const { projects, total } = await projectsService.listProjects({
       page, 
@@ -51,6 +51,7 @@ export async function listProjects(req, res, next) {
       search, 
       sort, 
       status, // Déjà géré par Zod validateQuery
+      authorId,
     });
     return paginated(res, { data: projects, page, limit, total });
   } catch (error) { next(error); }
