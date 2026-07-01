@@ -392,6 +392,7 @@ model Message {
 
 model Investment {
   id                String           @id @default(uuid())
+  userId            String           @map("user_id")
   investorId        String           @map("investor_id")
   projectId         String           @map("project_id")
   amount            Decimal          @db.Decimal(15, 2)
@@ -403,6 +404,7 @@ model Investment {
   equityPctAcquired Decimal?         @map("equity_pct_acquired") @db.Decimal(5, 2)
   platformFee       Decimal          @default(0) @map("platform_fee") @db.Decimal(15, 2)
   notes             String?
+  refundReason      String?          @map("refund_reason")
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
 
@@ -415,17 +417,23 @@ model Investment {
 }
 
 model PaymentTransaction {
-  id             String        @id @default(uuid())
-  investmentId   String        @map("investment_id")
-  provider       String
-  providerTxId   String?       @unique @map("provider_tx_id")
-  amount         Decimal       @db.Decimal(15, 2)
-  currency       String        @default("XAF")
-  status         PaymentStatus @default(initiated)
-  webhookData    Json?         @map("webhook_data")
-  errorMessage   String?       @map("error_message")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id                    String        @id @default(uuid())
+  investmentId          String        @map("investment_id")
+  provider              String
+  providerTxId          String?       @unique @map("provider_tx_id")
+  amount                Decimal       @db.Decimal(15, 2)
+  currency              String        @default("XAF")
+  status                PaymentStatus @default(initiated)
+  phoneNumber           String?       @map("phone_number")
+  referenceId           String?       @map("reference_id")
+  orderId               String?       @map("order_id")
+  payToken              String?       @map("pay_token")
+  stripePaymentIntentId String?       @map("stripe_payment_intent_id")
+  expiresAt             DateTime?     @map("expires_at")
+  webhookData           Json?         @map("webhook_data")
+  errorMessage          String?       @map("error_message")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
 
   investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
 
@@ -436,12 +444,14 @@ model EscrowMilestone {
   id              String   @id @default(uuid())
   investmentId    String   @map("investment_id")
   title           String
-  description     String
+  description     String?
   amountToRelease Decimal  @map("amount_to_release") @db.Decimal(15, 2)
   dueDate         DateTime @map("due_date")
   status          String   @default("pending")
   validatedAt     DateTime? @map("validated_at")
   validatedBy     String?  @map("validated_by")
+  createdBy       String?  @map("created_by")
+  notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 
   investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)

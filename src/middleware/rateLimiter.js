@@ -62,6 +62,15 @@ export const paymentLimiter = rateLimit({
   handler,
 });
 
+// ── Webhooks de paiements (MTN / Orange / Stripe)
+export const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max:      50,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  handler,
+});
+
 // ── API générale (routes privées) ────────────────────────
 // 100 requêtes par minute par IP
 export const apiLimiter = rateLimit({
@@ -71,3 +80,6 @@ export const apiLimiter = rateLimit({
   legacyHeaders:   false,
   handler,
 });
+
+// Alias pour globalLimiter utilisé dans le nouveau template de server.js
+export const globalLimiter = apiLimiter;
