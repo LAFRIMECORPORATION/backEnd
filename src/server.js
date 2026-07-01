@@ -99,6 +99,15 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // ════════════════════════════════════════════════════════════
 // HEALTH CHECK
 // ════════════════════════════════════════════════════════════
+app.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    message: "Launchpad API is alive",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({
     status: "OK",
@@ -107,6 +116,25 @@ app.get("/health", (_req, res) => {
     version: "1.5.0",
   });
 });
+
+function startSelfPing() {
+  const enabled = process.env.ENABLE_SELF_PING !== "false";
+  if (!enabled) return;
+
+  const url = process.env.HEALTH_URL || `http://localhost:${PORT}/health`;
+  const intervalMs = 4 * 60 * 1000; // toutes les 4 minutes
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(url, { method: "GET" });
+      if (!res.ok) {
+        console.warn(`Self-ping échoué : ${res.status} ${res.statusText}`);
+      }
+    } catch (err) {
+      console.warn("Self-ping Health failed:", err?.message || err);
+    }
+  }, intervalMs);
+}
 
 // ════════════════════════════════════════════════════════════
 // ROUTES API
@@ -176,6 +204,9 @@ async function start() {
 
       // Démarrer les cron jobs
       startCronJobs();
+
+      // Auto ping pour maintenir le serveur éveillé
+      startSelfPing();
     });
   } catch (err) {
     console.error("❌ Démarrage échoué :", err);
