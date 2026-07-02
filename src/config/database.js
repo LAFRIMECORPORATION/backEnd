@@ -24,4 +24,14 @@ export async function connectDatabase() {
   }
 }
 
+export async function pingDatabase() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return true;
+  } catch (error) {
+    console.error("❌ Ping base de données échoué :", error.message);
+    throw error;
+  }
+}
+
 export default prisma;

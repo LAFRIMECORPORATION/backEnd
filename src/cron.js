@@ -8,6 +8,7 @@
 
 import cron from "node-cron";
 import { cancelExpiredPayments } from "./modules/payments/payments.service.js";
+import { pingDatabase } from "./config/database.js";
 
 // ────────────────────────────────────────────────────────────
 // JOB 1 — Annuler les paiements expirés
@@ -29,10 +30,20 @@ export function startCronJobs() {
     }
   });
 
+  // Toutes les 5 minutes : ping DB pour garder Neon actif
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      await pingDatabase();
+      console.log(`[CRON] ${new Date().toISOString()} — Ping Neon OK`);
+    } catch (err) {
+      console.error("[CRON] Ping Neon échoué :", err.message);
+    }
+  });
+
   // Toutes les heures : log de santé DB (optionnel, peut être retiré)
   cron.schedule("0 * * * *", () => {
     console.log(`[CRON] ${new Date().toISOString()} — Heartbeat OK`);
   });
 
-  console.log("⏰ Cron jobs démarrés (paiements expirés : toutes les 5 min)");
+  console.log("⏰ Cron jobs démarrés (paiements expirés + ping Neon : toutes les 5 min)");
 }
