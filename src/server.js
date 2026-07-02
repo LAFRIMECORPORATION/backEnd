@@ -148,9 +148,11 @@ app.use("/api/users", usersRouter);
 
 // KYC
 app.use("/api/kyc", kycRouter);
+app.use("/api/admin/kyc", kycRouter);
 
 // Projects
 app.use("/api/projects", projectsRouter);
+app.use("/api/admin/projects", projectsRouter);
 
 // Messages & Conversations
 app.use("/api", messagesRouter);  // Monte /conversations + /messages
