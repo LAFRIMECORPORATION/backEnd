@@ -90,6 +90,7 @@ export const initSocket = (socketIoInstance) => {
         conversationId,
         userId,
         online: true,
+        lastSeen: getLastSeen(userId),
       });
     });
 
@@ -100,6 +101,7 @@ export const initSocket = (socketIoInstance) => {
         conversationId,
         userId,
         online: false,
+        lastSeen: getLastSeen(userId),
       });
     });
 

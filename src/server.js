@@ -10,7 +10,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 
 import { env } from "./config/env.js";
-import { connectDatabase } from "./config/database.js";
+import { connectDatabase, pingDatabase } from "./config/database.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { globalLimiter } from "./middleware/rateLimiter.js";
 import { initSocket } from "./socket.js";
@@ -31,7 +31,9 @@ import paymentsRouter, {
 
 const allowedOrigins = [
   env.FRONTEND_URL,
-  env.FRONTEND_URL?.endsWith("/") ? env.FRONTEND_URL.slice(0, -1) : `${env.FRONTEND_URL}/`,
+  env.FRONTEND_URL?.endsWith("/")
+    ? env.FRONTEND_URL.slice(0, -1)
+    : `${env.FRONTEND_URL}/`,
   "https://launch-pad-eosin.vercel.app",
   "https://launch-pad-eosin.vercel.app/",
   "http://localhost:5173",
@@ -39,7 +41,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3000/",
   "http://127.0.0.1:5173",
-  "http://127.0.0.1:5173/"
+  "http://127.0.0.1:5173/",
 ].filter(Boolean);
 
 // ── App & HTTP Server ─────────────────────────────────────────
@@ -64,18 +66,26 @@ app.set("io", io);
 app.use(helmet());
 
 // CORS dynamique
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS non autorisé pour l'origine : ${origin}`));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "stripe-signature", "X-Requested-With", "Accept"],
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS non autorisé pour l'origine : ${origin}`));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "stripe-signature",
+      "X-Requested-With",
+      "Accept",
+    ],
+  }),
+);
 
 // Rate limiting global
 app.use(globalLimiter);
@@ -86,10 +96,10 @@ app.post(
   "/api/payments/stripe/webhook",
   express.raw({ type: "application/json" }),
   (req, _res, next) => {
-    req.rawBody = req.body;   // Stocker le Buffer brut
+    req.rawBody = req.body; // Stocker le Buffer brut
     next();
   },
-  (await import("./modules/payments/payments.controller.js")).stripeWebhook
+  (await import("./modules/payments/payments.controller.js")).stripeWebhook,
 );
 
 // ── Corps JSON pour toutes les autres routes ─────────────────
@@ -122,9 +132,15 @@ function startSelfPing() {
   if (!enabled) return;
 
   const url = process.env.HEALTH_URL || `http://localhost:${PORT}/health`;
-  const intervalMs = 4 * 60 * 1000; // toutes les 4 minutes
+  const intervalMs = 4 * 60 * 1000;
 
   setInterval(async () => {
+    try {
+      await pingDatabase();
+    } catch (err) {
+      console.warn("Self-ping DB failed:", err?.message || err);
+    }
+
     try {
       const res = await fetch(url, { method: "GET" });
       if (!res.ok) {
@@ -155,12 +171,12 @@ app.use("/api/projects", projectsRouter);
 app.use("/api/admin/projects", projectsRouter);
 
 // Messages & Conversations
-app.use("/api", messagesRouter);  // Monte /conversations + /messages
+app.use("/api", messagesRouter); // Monte /conversations + /messages
 
 // ── Paiements ────────────────────────────────────────────────
-app.use("/api/payments", paymentsRouter);      // MTN · Orange · Stripe · status
-app.use("/api/investments", investmentsRouter);   // Liste + détail investissements
-app.use("/api/escrow", escrowRouter);        // Milestones + remboursements
+app.use("/api/payments", paymentsRouter); // MTN · Orange · Stripe · status
+app.use("/api/investments", investmentsRouter); // Liste + détail investissements
+app.use("/api/escrow", escrowRouter); // Milestones + remboursements
 
 // ── Admin ────────────────────────────────────────────────────
 app.use("/api/admin/investments", adminInvestmentsRouter);
@@ -202,7 +218,9 @@ async function start() {
       console.log(`\n🚀 Launchpad API démarrée sur le port ${PORT}`);
       console.log(`📡 Health : http://localhost:${PORT}/health`);
       console.log(`⚡ Socket.io : actif`);
-      console.log(`🔑 Phases actives : Auth · Users · KYC · Projects · Messages · Payments\n`);
+      console.log(
+        `🔑 Phases actives : Auth · Users · KYC · Projects · Messages · Payments\n`,
+      );
 
       // Démarrer les cron jobs
       startCronJobs();

@@ -8,9 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { env } from "./env.js";
 
 const prisma = new PrismaClient({
-  log: env.IS_PROD
-    ? ["error"]
-    : ["query", "info", "warn", "error"],
+  log: env.IS_PROD ? ["error"] : ["warn", "error"],
 });
 
 // Test de connexion au démarrage
@@ -19,7 +17,10 @@ export async function connectDatabase() {
     await prisma.$connect();
     console.log("✅ Base de données Neon PostgreSQL connectée");
   } catch (error) {
-    console.error("❌ Impossible de se connecter à la base de données :", error.message);
+    console.error(
+      "❌ Impossible de se connecter à la base de données :",
+      error.message,
+    );
     process.exit(1);
   }
 }

@@ -170,20 +170,17 @@ export async function getMessages(convId, userId, { page = 1, limit = 30 }) {
   await checkConvAccess(convId, userId);
   const skip = (page - 1) * limit;
 
-  const [messages, total] = await Promise.all([
-    prisma.message.findMany({
-      where: { conversationId: convId },
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      select: MESSAGE_SELECT,
-    }),
-    prisma.message.count({ where: { conversationId: convId } }),
-  ]);
+  const messages = await prisma.message.findMany({
+    where: { conversationId: convId },
+    skip,
+    take: limit,
+    orderBy: { createdAt: "desc" },
+    select: MESSAGE_SELECT,
+  });
 
-  await markAsRead(convId, userId);
+  markAsRead(convId, userId).catch(console.error);
 
-  return { messages: messages.reverse(), total };
+  return { messages: messages.reverse(), total: messages.length };
 }
 
 // ════════════════════════════════════════════════════════════
