@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 
 let io;
 const onlineUsers = new Map();
+const lastSeenByUser = new Map();
 
 function setUserOnline(userId, socketId) {
   const sockets = onlineUsers.get(userId) || new Set();
@@ -24,6 +25,15 @@ function setUserOffline(userId, socketId) {
 
 function isUserOnline(userId) {
   return onlineUsers.has(userId);
+}
+
+function setLastSeen(userId) {
+  if (!userId) return;
+  lastSeenByUser.set(userId, new Date().toISOString());
+}
+
+function getLastSeen(userId) {
+  return lastSeenByUser.get(userId) || null;
 }
 
 /**
@@ -56,7 +66,16 @@ export const initSocket = (socketIoInstance) => {
     if (userId) {
       setUserOnline(userId, socket.id);
       socket.join(`user_${userId}`);
-      socket.emit("presence_state", { userId, online: true });
+      io.emit("user_online", {
+        userId,
+        online: true,
+        lastSeen: getLastSeen(userId),
+      });
+      socket.emit("presence_state", {
+        userId,
+        online: true,
+        lastSeen: getLastSeen(userId),
+      });
     }
 
     socket.on("ping_server", (data) => {
@@ -114,6 +133,7 @@ export const initSocket = (socketIoInstance) => {
       socket.emit("presence_state", {
         userId: targetUserId,
         online: isUserOnline(targetUserId),
+        lastSeen: getLastSeen(targetUserId),
       });
     });
 
@@ -122,9 +142,11 @@ export const initSocket = (socketIoInstance) => {
       if (userId) {
         const isNowFullyOffline = setUserOffline(userId, socket.id);
         if (isNowFullyOffline) {
+          setLastSeen(userId);
           io.emit("user_online", {
             userId,
             online: false,
+            lastSeen: getLastSeen(userId),
           });
         }
       }
