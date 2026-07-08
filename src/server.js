@@ -29,6 +29,16 @@ import paymentsRouter, {
   adminInvestmentsRouter,
 } from "./modules/payments/payments.router.js";
 
+import forumRouter from "./modules/forum/forum.router.js";
+import notificationsRouter from "./modules/notifications/notification.router.js";
+import badgesRouter from "./modules/badges/badges.router.js";
+import appointmentsRouter from "./modules/appointments/appointments.router.js";
+import collaborationsRouter from "./modules/collaborations/collaborations.router.js";
+import feedRouter from "./modules/feed/feed.router.js";
+import adminRouter from "./modules/admin/admin.router.js";
+import dueDiligenceRouter from "./modules/due diligence/due diligence.router.js";
+import investorRequestsRouter from "./modules/investor requests/investor requests.router.js";
+
 const allowedOrigins = [
   env.FRONTEND_URL,
   env.FRONTEND_URL?.endsWith("/")
@@ -122,8 +132,24 @@ app.get("/health", (_req, res) => {
   res.json({
     status: "OK",
     timestamp: new Date().toISOString(),
-    phases: "Auth · Users · KYC · Projects · Messages · Payments",
-    version: "1.5.0",
+    version: "2.1.0",
+    modules: [
+      "Auth",
+      "Users",
+      "KYC",
+      "Projects",
+      "Messages",
+      "Payments",
+      "Forum",
+      "Notifications",
+      "Badges",
+      "Appointments",
+      "Collaborations",
+      "Feed",
+      "Admin",
+      "DueDiligence",
+      "InvestorRequests",
+    ],
   });
 });
 
@@ -182,6 +208,17 @@ app.use("/api/escrow", escrowRouter); // Milestones + remboursements
 app.use("/api/admin/investments", adminInvestmentsRouter);
 // Les autres routes admin (KYC, projets, stats) sont dans leurs modules respectifs
 
+// ── Phase 6 ───────────────────────────────────────────────────
+app.use("/api/forum", forumRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/badges", badgesRouter);
+app.use("/api/appointments", appointmentsRouter);
+app.use("/api/collaborations", collaborationsRouter);
+app.use("/api/feed", feedRouter);
+app.use("/api/due-diligence", dueDiligenceRouter);
+app.use("/api/investor-requests", investorRequestsRouter);
+app.use("/api/admin", adminRouter);
+
 // ════════════════════════════════════════════════════════════
 // ROUTE 404
 // ════════════════════════════════════════════════════════════
@@ -219,7 +256,7 @@ async function start() {
       console.log(`📡 Health : http://localhost:${PORT}/health`);
       console.log(`⚡ Socket.io : actif`);
       console.log(
-        `🔑 Phases actives : Auth · Users · KYC · Projects · Messages · Payments\n`,
+        `🔑 Phases actives : Auth · Users · KYC · Projects · Messages · Payments · Forum · Notifications · Badges · Appointments · Collaborations · Feed · DueDiligence · InvestorRequests · Admin\n`,
       );
 
       // Démarrer les cron jobs
