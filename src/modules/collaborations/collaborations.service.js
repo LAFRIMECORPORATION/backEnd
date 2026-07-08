@@ -31,7 +31,7 @@ export async function sendRequest(requesterId, { projectId, message }) {
     type:      "collaboration",
     title:     "🤝 Nouvelle demande de collaboration",
     body:      `${collab.requester.firstName} souhaite collaborer sur "${project.title}"`,
-    actionUrl: `/collaboration`,
+    actionUrl: `/collaborations?request=${collab.id}`,
   });
 
   return collab;
@@ -83,7 +83,7 @@ export async function accept(collabId, userId) {
     type:      "collaboration",
     title:     "✅ Demande de collaboration acceptée !",
     body:      `Votre demande pour "${collab.project.title}" a été acceptée.`,
-    actionUrl: `/collaboration`,
+    actionUrl: `/collaborations?request=${collab.id}`,
   });
 
   await checkAndAwardBadges(collab.requesterId, "collaboration_accepted");
@@ -109,7 +109,7 @@ export async function decline(collabId, userId, reason) {
     type:      "collaboration",
     title:     "❌ Demande de collaboration refusée",
     body:      `Votre demande pour "${collab.project.title}" n'a pas été retenue.`,
-    actionUrl: `/collaboration`,
+    actionUrl: `/collaborations?request=${collab.id}`,
   });
 
   return updated;

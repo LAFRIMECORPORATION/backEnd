@@ -487,7 +487,7 @@ export async function toggleLike(projectId, userId) {
         type:      "like",
         title:     "❤️ Nouveau like",
         body:      `${liker.firstName} ${liker.lastName} a aimé votre projet "${project.title}".`,
-        actionUrl: `/project/${projectId}`,
+        actionUrl: `/projects/${projectId}`,
       }).catch(console.error);
     }
 
@@ -573,7 +573,7 @@ export async function addComment(projectId, authorId, { content, parentId }) {
       type:      "comment",
       title:     "💬 Nouveau commentaire",
       body:      `${commenter.firstName} a commenté votre projet "${project.title}".`,
-      actionUrl: `/project/${projectId}`,
+      actionUrl: `/projects/${projectId}`,
     }).catch(console.error);
   }
 
@@ -683,7 +683,7 @@ export async function toggleCommentLike(commentId, userId) {
         type:      "comment_like",
         title:     "❤️ Like sur votre commentaire",
         body:      `${liker.firstName} ${liker.lastName} a aimé votre commentaire sur "${comment.project.title}".`,
-        actionUrl: `/project/${comment.project.id}`,
+        actionUrl: `/projects/${comment.project.id}`,
       }).catch(console.error);
     }
 
@@ -788,7 +788,7 @@ export async function approveProject(projectId, adminId, { note, featured } = {}
     type:      "system",
     title:     "✅ Projet publié !",
     body:      `Votre projet "${project.title}" a été validé et est maintenant visible sur Launchpad.`,
-    actionUrl: `/project/${projectId}`,
+    actionUrl: `/projects/${projectId}`,
   }).catch(console.error);
 
   await prisma.user.update({
@@ -859,7 +859,7 @@ export async function rejectProject(projectId, adminId, reason) {
     type:      "system",
     title:     "❌ Projet refusé",
     body:      `Votre projet "${project.title}" n'a pas pu être publié. Consultez les détails.`,
-    actionUrl: `/project/${projectId}`,
+    actionUrl: `/projects/${projectId}`,
   }).catch(console.error);
 
   return updated;
@@ -949,7 +949,7 @@ export async function recalculateProjectStats(projectId) {
       type:      "investment",
       title:     "🎉 Projet financé à 100% !",
       body:      `Félicitations ! "${project.title}" a atteint son objectif de financement.`,
-      actionUrl: `/project/${projectId}`,
+      actionUrl: `/projects/${projectId}`,
     }).catch(console.error);
   }
 

@@ -237,7 +237,7 @@ export async function sendMessage(
         ? (content || "").substring(0, 80) +
           (content && content.length > 80 ? "…" : "")
         : "📎 Fichier partagé",
-    actionUrl: "/messages",
+    actionUrl: `/messages?conversation=${conversationId}`,
   }).catch(console.error);
 
   // 4. Temps réel Socket.io

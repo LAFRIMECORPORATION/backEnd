@@ -61,10 +61,12 @@ export async function listNotifications(userId, { page = 1, limit = 30, unreadOn
 // PUT /api/notifications/mark-all-read
 // ════════════════════════════════════════════════════════════
 export async function markAllRead(userId) {
+  console.log(`🔔 markAllRead appelé pour userId: ${userId}`);
   const result = await prisma.notification.updateMany({
     where: { userId, isRead: false },
-    data:  { isRead: true, readAt: new Date() },
+    data:  { isRead: true },
   });
+  console.log(`🔔 ${result.count} notifications marquées comme lues`);
   return { updated: result.count };
 }
 
@@ -73,15 +75,18 @@ export async function markAllRead(userId) {
 // PUT /api/notifications/:id/read
 // ════════════════════════════════════════════════════════════
 export async function markOneRead(notifId, userId) {
+  console.log(`🔔 markOneRead appelé pour notifId: ${notifId}, userId: ${userId}`);
   const notif = await prisma.notification.findFirst({
     where: { id: notifId, userId },
   });
   if (!notif) throw new AppError("Notification introuvable.", 404, "NOT_FOUND");
 
-  return prisma.notification.update({
+  const updated = await prisma.notification.update({
     where: { id: notifId },
-    data:  { isRead: true, readAt: new Date() },
+    data:  { isRead: true },
   });
+  console.log(`🔔 notification ${notifId} marquée comme lue`);
+  return updated;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -164,8 +169,10 @@ async function sendWebPush(userId, { title, body, actionUrl }) {
 // GET /api/notifications/unread-count
 // ════════════════════════════════════════════════════════════
 export async function getUnreadCount(userId) {
+  console.log(`🔔 getUnreadCount appelé pour userId: ${userId}`);
   const count = await prisma.notification.count({
     where: { userId, isRead: false },
   });
+  console.log(`🔔 unreadCount: ${count}`);
   return { unreadCount: count };
 }

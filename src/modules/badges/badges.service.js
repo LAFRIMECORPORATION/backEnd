@@ -38,8 +38,8 @@ export async function awardBadge(userId, badgeKey) {
   if (!definition) return null;
 
   // Vérifier si déjà obtenu
-  const existing = await prisma.userBadge.findUnique({
-    where: { userId_badgeKey: { userId, badgeKey } },
+  const existing = await prisma.userBadge.findFirst({
+    where: { userId, badgeType: badgeKey },
   });
   if (existing) return null;
 
@@ -48,10 +48,11 @@ export async function awardBadge(userId, badgeKey) {
     prisma.userBadge.create({
       data: {
         userId,
-        badgeKey,
-        label:  definition.label,
-        icon:   definition.icon,
-        points: definition.points,
+        badgeType:  badgeKey,
+        badgeLabel: definition.label,
+        badgeIcon:  definition.icon,
+        pointsAwarded: definition.points,
+        awardedBy: "system",
       },
     }),
     prisma.user.update({
@@ -82,12 +83,12 @@ export async function getUserBadges(userId) {
       where:   { userId },
       orderBy: { awardedAt: "desc" },
       select: {
-        id:        true,
-        badgeKey:  true,
-        label:     true,
-        icon:      true,
-        points:    true,
-        awardedAt: true,
+        id:           true,
+        badgeType:    true,
+        badgeLabel:   true,
+        badgeIcon:    true,
+        pointsAwarded: true,
+        awardedAt:    true,
       },
     }),
     prisma.user.findUnique({
@@ -97,22 +98,22 @@ export async function getUserBadges(userId) {
   ]);
 
   // Ajouter les badges non encore obtenus (pour afficher les "locked")
-  const earnedKeys  = badges.map(b => b.badgeKey);
+  const earnedKeys  = badges.map(b => b.badgeType);
   const lockedBadges = Object.entries(BADGE_DEFINITIONS)
     .filter(([key]) => !earnedKeys.includes(key))
     .map(([key, def]) => ({
-      badgeKey: key,
-      label:    def.label,
-      icon:     def.icon,
-      points:   def.points,
-      locked:   true,
+      badgeType:  key,
+      badgeLabel: def.label,
+      badgeIcon:  def.icon,
+      points:     def.points,
+      locked:     true,
     }));
 
   return {
     badges,
     lockedBadges,
     reputationScore: user?.reputationScore || 0,
-    totalPoints:     badges.reduce((sum, b) => sum + b.points, 0),
+    totalPoints:     badges.reduce((sum, b) => sum + b.pointsAwarded, 0),
   };
 }
 

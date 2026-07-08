@@ -37,8 +37,11 @@ export async function saveRefreshToken(userId, token) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  await prisma.refreshToken.create({
-    data: { userId, token, expiresAt },
+  // Utiliser upsert pour éviter les erreurs de contrainte unique
+  await prisma.refreshToken.upsert({
+    where: { token },
+    update: { expiresAt },
+    create: { userId, token, expiresAt },
   });
 }
 
@@ -57,12 +60,13 @@ export async function verifyRefreshToken(token) {
   }
 
   if (stored.expiresAt < new Date()) {
-    await prisma.refreshToken.delete({ where: { token } });
+    // Supprimer le token expiré s'il existe encore
+    await prisma.refreshToken.delete({ where: { token } }).catch(() => {});
     throw new Error("Refresh token expiré.");
   }
 
-  // 3. Supprimer le token utilisé (rotation)
-  await prisma.refreshToken.delete({ where: { token } });
+  // 3. NE PAS supprimer le token immédiatement (évite les problèmes de concurrence)
+  // Le token sera supprimé lors du logout ou quand il expirera
 
   return decoded;
 }
