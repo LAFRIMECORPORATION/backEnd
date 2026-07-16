@@ -118,7 +118,7 @@ export async function toggleLike(req, res, next) {
       id: targetId,
       likesCount: result.likesCount ?? result.likes ?? 0,
       likedByMe: result.likedByMe ?? false,
-      ...result
+      project: result
     });
   } catch (error) { next(error); }
 }

@@ -21,18 +21,23 @@ export async function createRequest(investorId, {
     throw new AppError(`Type invalide. Valeurs : ${REQUEST_TYPES.join(", ")}`, 400, "INVALID_TYPE");
   }
 
+  const budgetJson = JSON.stringify({
+    minAmount: minAmount || null,
+    maxAmount: maxAmount || null,
+    equityRange: equityRange || null,
+    requirements: requirements?.trim() || null,
+    deadline: deadline || null,
+  });
+
   const request = await prisma.investorRequest.create({
     data: {
-      investorId,
+      authorId:     investorId,
       title:        title.trim(),
       description:  description.trim(),
-      type,
-      sectors:      sectors || [],
-      minAmount:    minAmount || null,
-      maxAmount:    maxAmount || null,
-      equityRange:  equityRange || null,
-      requirements: requirements?.trim() || null,
-      deadline:     deadline ? new Date(deadline) : null,
+      reqType:      type,
+      skillsRequired: sectors || [],
+      budget:       budgetJson,
+      duration:     deadline || null,
       status:       "active",
     },
     select: _requestSelect(),
@@ -42,14 +47,14 @@ export async function createRequest(investorId, {
   await prisma.feedEvent.create({
     data: {
       actorId:    investorId,
-      eventType:  "investor_request_published",
+      eventType:  "marketplace_posted",
       entityType: "investor_request",
       entityId:   request.id,
       metadata:   { title: request.title, type, sectors },
     },
   }).catch(console.error);
 
-  return request;
+  return _mapRequest(request);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -58,17 +63,21 @@ export async function createRequest(investorId, {
 // ════════════════════════════════════════════════════════════
 export async function listRequests({ type, sector, search, page = 1, limit = 20 }) {
   const skip = (page - 1) * limit;
+  const nowIso = new Date().toISOString();
 
   const where = {
     status: "active",
-    ...(type   ? { type }                                                   : {}),
-    ...(sector ? { sectors: { has: sector } }                               : {}),
+    ...(type   ? { reqType: type }                                                   : {}),
+    ...(sector ? { skillsRequired: { has: sector } }                               : {}),
     ...(search ? { OR: [
       { title:       { contains: search, mode: "insensitive" } },
       { description: { contains: search, mode: "insensitive" } },
     ]} : {}),
-    // Pas encore expirées
-    OR: [{ deadline: null }, { deadline: { gte: new Date() } }],
+    // Pas encore expirées (duration est le champ stockant la date limite brute)
+    OR: [
+      { duration: null },
+      { duration: { gte: nowIso } }
+    ],
   };
 
   const [requests, total] = await Promise.all([
@@ -82,7 +91,12 @@ export async function listRequests({ type, sector, search, page = 1, limit = 20 
     prisma.investorRequest.count({ where }),
   ]);
 
-  return { requests, total, page, totalPages: Math.ceil(total / limit) };
+  return { 
+    requests: requests.map(_mapRequest), 
+    total, 
+    page, 
+    totalPages: Math.ceil(total / limit) 
+  };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -96,24 +110,23 @@ export async function getRequest(requestId) {
       ..._requestSelect(),
       applications: {
         select: {
-          id:        true,
-          status:    true,
-          message:   true,
-          createdAt: true,
+          id:           true,
+          status:       true,
+          coverMessage: true,
+          createdAt:    true,
           applicant: {
             select: {
-              id: true, firstName: true, lastName: true,
-              profile: { select: { avatarUrl: true, university: true } },
+              id: true, firstName: true, lastName: true, avatarUrl: true,
+              profile: { select: { university: true } },
             },
           },
-          project: { select: { id: true, title: true, category: true } },
         },
       },
     },
   });
 
   if (!request) throw new AppError("Offre introuvable.", 404, "NOT_FOUND");
-  return request;
+  return _mapRequest(request);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -123,45 +136,45 @@ export async function getRequest(requestId) {
 export async function applyToRequest(requestId, applicantId, { message, projectId }) {
   const request = await prisma.investorRequest.findFirst({
     where:  { id: requestId, status: "active" },
-    select: { id: true, title: true, investorId: true },
+    select: { id: true, title: true, authorId: true },
   });
 
   if (!request) throw new AppError("Offre introuvable ou fermée.", 404, "NOT_FOUND");
-  if (request.investorId === applicantId) {
+  if (request.authorId === applicantId) {
     throw new AppError("Vous ne pouvez pas postuler à votre propre offre.", 400, "SELF_APPLY");
   }
 
   // Vérifier doublon
-  const existing = await prisma.investorRequestApplication.findFirst({
-    where: { requestId, applicantId },
+  const existing = await prisma.requestApplication.findUnique({
+    where: { 
+      requestId_applicantId: { requestId, applicantId }
+    },
   });
   if (existing) throw new AppError("Vous avez déjà postulé à cette offre.", 409, "DUPLICATE");
 
-  const application = await prisma.investorRequestApplication.create({
+  const application = await prisma.requestApplication.create({
     data: {
       requestId,
       applicantId,
-      projectId: projectId || null,
-      message:   message?.trim() || null,
+      coverMessage: projectId ? `[Projet: ${projectId}] ${message?.trim() || ""}` : message?.trim() || null,
       status:    "pending",
     },
     select: {
-      id: true, status: true, message: true, createdAt: true,
-      applicant: { select: { id: true, firstName: true, lastName: true } },
-      project:   { select: { id: true, title: true } },
+      id: true, status: true, coverMessage: true, createdAt: true,
+      applicant: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
     },
   });
 
   // Notifier l'investisseur
   await createNotification({
-    userId:    request.investorId,
+    userId:    request.authorId,
     type:      "investment",
     title:     "📩 Nouvelle candidature reçue",
     body:      `${application.applicant.firstName} a postulé à votre offre "${request.title}"`,
     actionUrl: `/investor-requests/${requestId}`,
   });
 
-  return application;
+  return _mapApplication(application);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -170,21 +183,37 @@ export async function applyToRequest(requestId, applicantId, { message, projectI
 // ════════════════════════════════════════════════════════════
 export async function updateRequest(requestId, investorId, data) {
   const request = await prisma.investorRequest.findFirst({
-    where:  { id: requestId, investorId },
-    select: { id: true },
+    where:  { id: requestId, authorId: investorId },
+    select: { id: true, budget: true, duration: true },
   });
   if (!request) throw new AppError("Offre introuvable ou non autorisée.", 404, "NOT_FOUND");
 
-  return prisma.investorRequest.update({
+  let extra = {};
+  if (request.budget) {
+    try {
+      extra = JSON.parse(request.budget);
+    } catch (e) {}
+  }
+
+  if (data.minAmount !== undefined) extra.minAmount = data.minAmount;
+  if (data.maxAmount !== undefined) extra.maxAmount = data.maxAmount;
+  if (data.equityRange !== undefined) extra.equityRange = data.equityRange;
+  if (data.requirements !== undefined) extra.requirements = data.requirements;
+  if (data.deadline !== undefined) extra.deadline = data.deadline;
+
+  const updated = await prisma.investorRequest.update({
     where: { id: requestId },
     data: {
       ...(data.title       ? { title:       data.title.trim()       } : {}),
       ...(data.description ? { description: data.description.trim() } : {}),
       ...(data.status      ? { status:      data.status             } : {}),
-      ...(data.deadline    ? { deadline:    new Date(data.deadline)  } : {}),
+      ...(data.deadline    ? { duration:    data.deadline           } : {}),
+      budget: JSON.stringify(extra),
     },
     select: _requestSelect(),
   });
+
+  return _mapRequest(updated);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -193,7 +222,7 @@ export async function updateRequest(requestId, investorId, data) {
 // ════════════════════════════════════════════════════════════
 export async function deleteRequest(requestId, investorId) {
   const request = await prisma.investorRequest.findFirst({
-    where:  { id: requestId, investorId },
+    where:  { id: requestId, authorId: investorId },
     select: { id: true },
   });
   if (!request) throw new AppError("Offre introuvable ou non autorisée.", 404, "NOT_FOUND");
@@ -211,36 +240,76 @@ export async function deleteRequest(requestId, investorId) {
 // GET /api/investor-requests/mine
 // ════════════════════════════════════════════════════════════
 export async function myRequests(investorId) {
-  return prisma.investorRequest.findMany({
-    where:   { investorId, status: { not: "deleted" } },
+  const requests = await prisma.investorRequest.findMany({
+    where:   { authorId: investorId, status: { not: "deleted" } },
     orderBy: { createdAt: "desc" },
     select:  {
       ..._requestSelect(),
       _count: { select: { applications: true } },
     },
   });
+
+  return requests.map(_mapRequest);
 }
 
 // ── Sélecteur réutilisable ────────────────────────────────────
 function _requestSelect() {
   return {
-    id:           true,
-    title:        true,
-    description:  true,
-    type:         true,
-    sectors:      true,
-    minAmount:    true,
-    maxAmount:    true,
-    equityRange:  true,
-    requirements: true,
-    deadline:     true,
-    status:       true,
-    createdAt:    true,
-    investor: {
+    id:             true,
+    title:          true,
+    description:    true,
+    reqType:        true,
+    skillsRequired: true,
+    budget:         true,
+    duration:       true,
+    status:         true,
+    createdAt:      true,
+    author: {
       select: {
-        id: true, firstName: true, lastName: true,
-        profile: { select: { avatarUrl: true, company: true } },
+        id: true, firstName: true, lastName: true, avatarUrl: true,
+        profile: { select: { company: true } },
       },
     },
+  };
+}
+
+// ── Mappeurs internes pour assurer la compatibilité frontend ──
+function _mapRequest(req) {
+  if (!req) return null;
+  let extra = {};
+  if (req.budget) {
+    try {
+      extra = JSON.parse(req.budget);
+    } catch (e) {}
+  }
+
+  return {
+    id:           req.id,
+    title:        req.title,
+    description:  req.description,
+    type:         req.reqType,
+    sectors:      req.skillsRequired || [],
+    minAmount:    extra.minAmount || null,
+    maxAmount:    extra.maxAmount || null,
+    equityRange:  extra.equityRange || null,
+    requirements: extra.requirements || null,
+    deadline:     extra.deadline || req.duration || null,
+    status:       req.status,
+    createdAt:    req.createdAt,
+    investor:     req.author,
+    _count:       req._count,
+    applications: req.applications ? req.applications.map(_mapApplication) : undefined,
+  };
+}
+
+function _mapApplication(app) {
+  if (!app) return null;
+  return {
+    id:           app.id,
+    status:       app.status,
+    message:      app.coverMessage,
+    createdAt:    app.createdAt,
+    applicant:    app.applicant,
+    project:      null, // Projet simulé car non existant dans le nouveau schéma
   };
 }

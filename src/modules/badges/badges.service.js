@@ -155,7 +155,7 @@ export async function checkAndAwardBadges(userId, trigger, context = {}) {
       break;
 
     case "forum_replies_10": {
-      const count = await prisma.forumReply.count({ where: { authorId: userId } });
+      const count = await prisma.forumPost.count({ where: { authorId: userId, parentId: { not: null } } });
       if (count >= 10) awarded.push(await awardBadge(userId, "helpful_member"));
       break;
     }

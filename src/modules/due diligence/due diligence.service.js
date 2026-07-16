@@ -38,7 +38,8 @@ export async function analyzeProject(projectId, userId) {
       tags:        true,
       goalAmount:  true,
       raisedAmount:true,
-      equity:      true,
+      equityPct:   true,
+      equityType:  true,
       deadline:    true,
       teamSize:    true,
       stage:       true,
@@ -239,7 +240,7 @@ ${project.description}
 DONNÉES FINANCIÈRES :
 - Objectif de levée : ${Number(project.goalAmount).toLocaleString("fr-FR")} XAF
 - Montant levé : ${Number(project.raisedAmount).toLocaleString("fr-FR")} XAF (${fundingPct}%)
-- Équité proposée : ${project.equity || "Non précisée"}%
+- Équité proposée : ${project.equityPct || "Non précisée"}%
 - Jours restants : ${daysLeft !== null ? daysLeft : "Pas de deadline"}
 
 TRACTION :

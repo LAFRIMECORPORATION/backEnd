@@ -18,10 +18,13 @@ import { checkAndAwardBadges } from "./modules/badges/badges.service.js";
 // JOB 1 — Annuler les paiements expirés
 // Fréquence : toutes les 5 minutes
 // Rationale : Les paiements MTN/Orange expirent après 10 min
-//             sans confirmation. Ce job les marque "failed"
-//             et notifie l'investisseur.
+//             sans confirmation.
 // ────────────────────────────────────────────────────────────
 export function startCronJobs() {
+  console.log("⏰ Cron jobs désactivés (mis en commentaire) pour économiser les tokens Neon.");
+  console.log("   Pour réactiver une tâche, décommentez-la dans src/cron.js");
+
+  /*
   // Toutes les 5 minutes : annuler les paiements expirés
   cron.schedule("*/5 * * * *", async () => {
     try {
@@ -38,17 +41,9 @@ export function startCronJobs() {
       );
     }
   });
+  */
 
-  // Toutes les 5 minutes : ping DB pour garder Neon actif
-  cron.schedule("*/5 * * * *", async () => {
-    try {
-      await pingDatabase();
-      console.log(`[CRON] ${new Date().toISOString()} — Ping Neon OK`);
-    } catch (err) {
-      console.error("[CRON] Ping Neon échoué :", err.message);
-    }
-  });
-
+  /*
   // Toutes les heures : rappels RDV (J-1 et H-1)
   cron.schedule("0 * * * *", async () => {
     try {
@@ -108,7 +103,9 @@ export function startCronJobs() {
       console.error("[CRON] Erreur rappels RDV :", err.message);
     }
   });
+  */
 
+  /*
   // Tous les jours à minuit : marquer RDV passés comme terminés
   cron.schedule("0 0 * * *", async () => {
     try {
@@ -143,7 +140,9 @@ export function startCronJobs() {
       console.error("[CRON] Erreur auto-complete RDV :", err.message);
     }
   });
+  */
 
+  /*
   // Tous les jours à 2h : générer les embeddings manquants
   cron.schedule("0 2 * * *", async () => {
     try {
@@ -165,7 +164,9 @@ export function startCronJobs() {
       console.error("[CRON] Embeddings IA :", err.message);
     }
   });
+  */
 
+  /*
   // Tous les jours à 3h : badge projets trending
   cron.schedule("0 3 * * *", async () => {
     try {
@@ -202,7 +203,9 @@ export function startCronJobs() {
       console.error("[CRON] Badges trending :", err.message);
     }
   });
+  */
 
+  /*
   // Tous les dimanches à minuit : nettoyage notifs lues anciennes
   cron.schedule("0 0 * * 0", async () => {
     try {
@@ -223,18 +226,10 @@ export function startCronJobs() {
       console.error("[CRON] Nettoyage notifs :", err.message);
     }
   });
+  */
 
-  // Toutes les heures : log de santé DB
+  // Toutes les heures : log de santé simple (pas de requête BD)
   cron.schedule("0 * * * *", () => {
     console.log(`[CRON] ${new Date().toISOString()} — Heartbeat OK`);
   });
-
-  console.log("⏰ Cron jobs démarrés");
-  console.log("   • Paiements expirés    : toutes les 5 min");
-  console.log("   • Ping Neon            : toutes les 5 min");
-  console.log("   • Rappels RDV J-1/H-1  : toutes les heures");
-  console.log("   • Auto-complete RDV    : tous les jours à minuit");
-  console.log("   • Embeddings IA        : 2h du matin");
-  console.log("   • Projets à traction   : 3h du matin");
-  console.log("   • Nettoyage notifs     : dimanche minuit");
 }

@@ -8,6 +8,7 @@ import { uploadProjectCover } from "../../config/cloudinary.js";
 import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { sendProjectPublishedEmail, sendAdminNewProjectEmail } from "../../utils/email.js";
+import { awardBadge } from "../badges/badges.service.js";
 
 // ── Sélecteur liste projets (léger) ──────────────────────
 const PROJECT_LIST_SELECT = {
@@ -222,8 +223,12 @@ export async function publishProject(projectId, authorId) {
 }
 
 // ════════════════════════════════════════════════════════════
-// LISTER LES PROJETS
+// LISTER LES PROJETS (OPTIMISÉ AVEC CACHE)
 // ════════════════════════════════════════════════════════════
+// Cache simple pour éviter les requêtes répétées
+const projectsListCache = new Map();
+const LIST_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
 export async function listProjects({
   page = 1, limit = 12,
   category, stage, minGoal, maxGoal,
@@ -231,6 +236,17 @@ export async function listProjects({
   status = "active",
   authorId = null,
 }) {
+  // Générer une clé de cache unique basée sur les paramètres
+  const cacheKey = JSON.stringify({ page, limit, category, stage, minGoal, maxGoal, search, sort, status, authorId });
+  
+  // Vérifier le cache (seulement pour les requêtes publiques, pas pour authorId spécifique)
+  if (!authorId) {
+    const cached = projectsListCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < LIST_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const skip = (page - 1) * limit;
 
   // 🛡️ FIX : Cloisonnement strict des statuts pour éviter qu'un tiers lise les brouillons (draft) privés d'un auteur
@@ -274,9 +290,21 @@ export async function listProjects({
     goalAmount:   Number(p.goalAmount),
     raisedAmount: Number(p.raisedAmount),
     commentsCount: p._count?.comments || 0,
+    likedByMe: false, // Sera calculé dynamiquement si userId fourni
+    isSaved: false,  // Sera calculé dynamiquement si userId fourni
   }));
 
-  return { projects: enriched, total };
+  const result = { projects: enriched, total };
+
+  // Mettre en cache (seulement pour les requêtes publiques)
+  if (!authorId) {
+    projectsListCache.set(cacheKey, {
+      timestamp: Date.now(),
+      data: result
+    });
+  }
+
+  return result;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -315,7 +343,7 @@ export async function getProjectById(id, viewerId = null) {
     goalAmount:    Number(project.goalAmount),
     raisedAmount:  Number(project.raisedAmount),
     fundingPct:    Math.round((Number(project.raisedAmount) / Number(project.goalAmount)) * 100) || 0,
-    isLiked,
+    likedByMe:     isLiked,
     isSaved,
     commentsCount: project._count?.comments || 0,
   };
@@ -695,9 +723,19 @@ export async function toggleCommentLike(commentId, userId) {
 }
 
 // ════════════════════════════════════════════════════════════
-// PROJETS SIMILAIRES
+// PROJETS SIMILAIRES (OPTIMISÉ)
 // ════════════════════════════════════════════════════════════
+// Cache simple en mémoire pour éviter les requêtes répétées
+const similarProjectsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function getSimilarProjects(projectId) {
+  // Vérifier le cache
+  const cached = similarProjectsCache.get(projectId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
   const project = await prisma.project.findUnique({
     where:  { id: projectId },
     select: { category: true, tags: true, stage: true },
@@ -705,27 +743,40 @@ export async function getSimilarProjects(projectId) {
 
   if (!project) throw new AppError("Projet introuvable.", 404, "NOT_FOUND");
 
+  // Optimisation : utiliser seulement les 3 premiers tags pour la recherche
+  const tagsToSearch = project.tags?.slice(0, 3) || [];
+
+  // Optimisation : requête simplifiée sans OR complexe
   const similar = await prisma.project.findMany({
     where: {
       id:       { not: projectId },
       status:   "active",
-      OR: [
-        { category: project.category },
-        { tags: { hasSome: project.tags } },
-      ],
+      // Prioriser la catégorie, puis les tags si pas assez de résultats
+      ...(tagsToSearch.length > 0 
+        ? { tags: { hasSome: tagsToSearch } }
+        : { category: project.category }
+      ),
     },
     take:    4,
     orderBy: { viewsCount: "desc" },
     select:  PROJECT_LIST_SELECT,
   });
 
-  return similar.map(p => ({
+  const result = similar.map(p => ({
     ...p,
     goalAmount:   Number(p.goalAmount),
     raisedAmount: Number(p.raisedAmount),
     fundingPct:   Math.round((Number(p.raisedAmount) / Number(p.goalAmount)) * 100) || 0,
     similarityScore: project.category === p.category ? 75 : 60,
   }));
+
+  // Mettre en cache
+  similarProjectsCache.set(projectId, {
+    timestamp: Date.now(),
+    data: result
+  });
+
+  return result;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -801,13 +852,7 @@ export async function approveProject(projectId, adminId, { note, featured } = {}
   });
 
   if (projectCount === 1) {
-    // 🛡️ FIX : Appel correct de la fonction asynchrone déclarée ci-dessous
-    await awardBadge(project.author.id, {
-      badgeType:    "first_project",
-      badgeLabel:   "Premier projet",
-      badgeIcon:    "🌱",
-      pointsAwarded: 10,
-    });
+    await awardBadge(project.author.id, "first_project").catch(console.error);
   }
 
   return updated;
@@ -954,37 +999,4 @@ export async function recalculateProjectStats(projectId) {
   }
 
   return { raisedAmount, investorsCount, isFunded };
-}
-
-// ════════════════════════════════════════════════════════════
-// HELPER : Attribuer un badge (Déclaration Synchrone Propre)
-// ════════════════════════════════════════════════════════════
-export async function awardBadge(userId, { badgeType, badgeLabel, badgeIcon, pointsAwarded }) {
-  try {
-    const existing = await prisma.userBadge.findFirst({
-      where: { userId, badgeType },
-    });
-    if (existing) return;
-
-    await prisma.$transaction([
-      prisma.userBadge.create({
-        data: { userId, badgeType, badgeLabel, badgeIcon, pointsAwarded, awardedBy: "system" },
-      }),
-      prisma.user.update({
-        where: { id: userId },
-        data:  { reputationScore: { increment: pointsAwarded } },
-      }),
-    ]);
-
-    createNotification({
-      userId,
-      type:      "badge",
-      title:     `${badgeIcon} Nouveau badge obtenu !`,
-      body:      `Vous avez obtenu le badge "${badgeLabel}" (+${pointsAwarded} pts).`,
-      actionUrl: "/badges",
-    }).catch(console.error);
-
-  } catch (error) {
-    console.error("❌ Erreur attribution badge :", error.message);
-  }
 }

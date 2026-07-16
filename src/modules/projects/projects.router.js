@@ -7,7 +7,7 @@ import { Router } from "express";
 import multer from "multer";
 import { authenticate, authenticateOptional } from "../../middleware/authenticate.js";
 import { requireRole, requireKyc } from "../../middleware/authorize.js";
-import { uploadLimiter, publicLimiter } from "../../middleware/rateLimiter.js";
+import { uploadLimiter, publicLimiter, similarLimiter } from "../../middleware/rateLimiter.js";
 import {
   validate, validateQuery,
   createProjectSchema, updateProjectSchema,
@@ -49,7 +49,7 @@ router.post("/",             authenticate, requireRole("student","admin"), valid
 // ============================================================
 router.get("/:id",           publicLimiter, authenticateOptional, controller.getProjectById);
 router.get("/:id/comments",  publicLimiter, controller.getComments);
-router.get("/:id/similar",   publicLimiter, controller.getSimilarProjects);
+router.get("/:id/similar",   similarLimiter, controller.getSimilarProjects);
 
 // 📸 Intercepte la clé "cover" envoyée par le FormData Front-end
 router.post("/:id/cover",    authenticate, requireRole("student","admin"), requireKyc, uploadLimiter, coverUpload.single("cover"), controller.uploadCover);

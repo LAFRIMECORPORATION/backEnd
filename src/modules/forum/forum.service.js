@@ -106,10 +106,11 @@ export async function getPost(postId, userId) {
     where:  { id: postId, isDeleted: false },
     select: {
       ..._postSelect(userId),
+      categoryId: true,
       replies: {
-        where:   { isDeleted: false },
+        where:   { isDeleted: false, parentId: postId },
         orderBy: { createdAt: "asc" },
-        select:  _replySelect(userId),
+        select:  _postSelect(userId),
       },
     },
   });
@@ -185,15 +186,15 @@ export async function toggleLike(postId, userId) {
 
   if (!post) throw new AppError("Post introuvable.", 404, "NOT_FOUND");
 
-  // Vérifier si déjà liké
-  const existing = await prisma.forumLike.findUnique({
-    where: { postId_userId: { postId, userId } },
+  // Vérifier si déjà liké via la relation likes (CommentLike réutilisé pour ForumPost)
+  const existing = await prisma.commentLike.findFirst({
+    where: { userId, commentId: postId },
   });
 
   if (existing) {
     // Unlike
     await prisma.$transaction([
-      prisma.forumLike.delete({ where: { postId_userId: { postId, userId } } }),
+      prisma.commentLike.delete({ where: { id: existing.id } }),
       prisma.forumPost.update({
         where: { id: postId },
         data:  { likesCount: { decrement: 1 } },
@@ -203,7 +204,7 @@ export async function toggleLike(postId, userId) {
   } else {
     // Like
     await prisma.$transaction([
-      prisma.forumLike.create({ data: { postId, userId } }),
+      prisma.commentLike.create({ data: { userId, commentId: postId } }),
       prisma.forumPost.update({
         where: { id: postId },
         data:  { likesCount: { increment: 1 } },
@@ -228,7 +229,7 @@ export async function toggleLike(postId, userId) {
 // ════════════════════════════════════════════════════════════
 // AJOUTER UNE RÉPONSE
 // POST /api/forum/posts/:id/replies
-// ════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════�
 export async function addReply(postId, authorId, { content, parentReplyId }) {
   const post = await prisma.forumPost.findFirst({
     where:  { id: postId, isDeleted: false },
@@ -237,22 +238,20 @@ export async function addReply(postId, authorId, { content, parentReplyId }) {
 
   if (!post) throw new AppError("Post introuvable.", 404, "NOT_FOUND");
 
-  const reply = await prisma.forumReply.create({
+  // Utiliser ForumPost avec parent pour les réponses (auto-référence)
+  const reply = await prisma.forumPost.create({
     data: {
-      postId,
       authorId,
-      content:       content.trim(),
-      parentReplyId: parentReplyId || null,
+      categoryId: post.categoryId,
+      parentId: postId,
+      content: content.trim(),
     },
-    select: _replySelect(authorId),
+    select: _postSelect(authorId),
   });
 
-  // Incrémenter le compteur de réponses
-  await prisma.forumPost.update({
-    where: { id: postId },
-    data:  { repliesCount: { increment: 1 } },
-  });
-
+  // Incrémenter le compteur de réponses (manquant dans schéma, on utilise un compteur dérivé)
+  const repliesCount = await prisma.forumPost.count({ where: { parentId: postId, isDeleted: false } });
+  
   // Notifier l'auteur du post
   if (post.authorId !== authorId) {
     createNotification({
@@ -264,7 +263,7 @@ export async function addReply(postId, authorId, { content, parentReplyId }) {
     }).catch(console.error);
   }
 
-  return reply;
+  return { ...reply, repliesCount };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -272,27 +271,28 @@ export async function addReply(postId, authorId, { content, parentReplyId }) {
 // POST /api/forum/replies/:id/like
 // ════════════════════════════════════════════════════════════
 export async function toggleReplyLike(replyId, userId) {
-  const reply = await prisma.forumReply.findFirst({
-    where:  { id: replyId, isDeleted: false },
+  const reply = await prisma.forumPost.findFirst({
+    where:  { id: replyId, isDeleted: false, parentId: { not: null } },
     select: { id: true, likesCount: true },
   });
 
   if (!reply) throw new AppError("Réponse introuvable.", 404, "NOT_FOUND");
 
-  const existing = await prisma.forumReplyLike.findUnique({
-    where: { replyId_userId: { replyId, userId } },
+  // Réutiliser CommentLike pour les likes de réponses forum
+  const existing = await prisma.commentLike.findFirst({
+    where: { userId, commentId: replyId },
   });
 
   if (existing) {
     await prisma.$transaction([
-      prisma.forumReplyLike.delete({ where: { replyId_userId: { replyId, userId } } }),
-      prisma.forumReply.update({ where: { id: replyId }, data: { likesCount: { decrement: 1 } } }),
+      prisma.commentLike.delete({ where: { id: existing.id } }),
+      prisma.forumPost.update({ where: { id: replyId }, data: { likesCount: { decrement: 1 } } }),
     ]);
     return { liked: false, likesCount: reply.likesCount - 1 };
   } else {
     await prisma.$transaction([
-      prisma.forumReplyLike.create({ data: { replyId, userId } }),
-      prisma.forumReply.update({ where: { id: replyId }, data: { likesCount: { increment: 1 } } }),
+      prisma.commentLike.create({ data: { userId, commentId: replyId } }),
+      prisma.forumPost.update({ where: { id: replyId }, data: { likesCount: { increment: 1 } } }),
     ]);
     return { liked: true, likesCount: reply.likesCount + 1 };
   }
@@ -326,7 +326,6 @@ function _postSelect(userId) {
     title:        true,
     content:      true,
     category:     true,
-    tags:         true,
     likesCount:   true,
     repliesCount: true,
     viewsCount:   true,
@@ -338,7 +337,7 @@ function _postSelect(userId) {
         id:        true,
         firstName: true,
         lastName:  true,
-        profile: { select: { avatarUrl: true } },
+        avatarUrl: true,
       },
     },
     likes: userId
@@ -347,24 +346,4 @@ function _postSelect(userId) {
   };
 }
 
-function _replySelect(userId) {
-  return {
-    id:            true,
-    content:       true,
-    likesCount:    true,
-    parentReplyId: true,
-    isEdited:      true,
-    createdAt:     true,
-    author: {
-      select: {
-        id:        true,
-        firstName: true,
-        lastName:  true,
-        profile: { select: { avatarUrl: true } },
-      },
-    },
-    likes: userId
-      ? { where: { userId }, select: { userId: true }, take: 1 }
-      : false,
-  };
-}
+// _replySelect supprimé - on utilise _postSelect pour les réponses aussi (auto-référence)

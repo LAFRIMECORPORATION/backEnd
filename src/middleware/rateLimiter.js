@@ -17,10 +17,10 @@ const handler = (req, res) => {
 };
 
 // ── Routes publiques (explore, liste projets) ─────────────
-// 200 requêtes par 15 minutes par IP
+// 500 requêtes par 15 minutes par IP
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:      200,
+  max:      500,
   standardHeaders: true,
   legacyHeaders:   false,
   handler,
@@ -72,14 +72,24 @@ export const webhookLimiter = rateLimit({
 });
 
 // ── API générale (routes privées) ────────────────────────
-// 100 requêtes par minute par IP
+// 300 requêtes par minute par IP
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max:      100,
+  max:      300,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  handler,
+});
+
+// ── Routes similaires (projets similaires, recommandations) ──
+// 20 requêtes par minute par IP pour éviter les abus
+export const similarLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max:      20,
   standardHeaders: true,
   legacyHeaders:   false,
   handler,
 });
 
 // Alias pour globalLimiter utilisé dans le nouveau template de server.js
-export const globalLimiter = apiLimiter;
+export const globalLimiter = apiLimiter;

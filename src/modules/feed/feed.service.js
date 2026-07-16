@@ -10,10 +10,19 @@ export const FEED_FILTERS = ["all", "projects", "investments", "forum", "collabo
 export async function getFeed(userId, { filter = "all", page = 1, limit = 20 }) {
   const skip  = (page - 1) * limit;
 
+  // Mapping filter vers les valeurs enum FeedEventType
+  const eventTypeMap = {
+    projects: ["project_published", "project_funded", "project_view"],
+    investments: ["investment_made"],
+    forum: [],
+    collaborations: ["collaboration_formed"],
+    badges: ["badge_earned"],
+  };
+
   const where = {
-    ...(filter !== "all" ? { eventType: { startsWith: filter === "projects" ? "project" : filter === "investments" ? "investment" : filter === "forum" ? "forum" : filter === "badges" ? "badge" : "collaboration" } } : {}),
-    // Ne pas montrer ses propres actions dans certains cas
-    NOT: filter === "all" ? [] : [],
+    ...(filter !== "all" && eventTypeMap[filter] ? { 
+      eventType: { in: eventTypeMap[filter] } 
+    } : {}),
   };
 
   const [events, total] = await Promise.all([
@@ -31,8 +40,7 @@ export async function getFeed(userId, { filter = "all", page = 1, limit = 20 }) 
         createdAt:  true,
         actor: {
           select: {
-            id: true, firstName: true, lastName: true,
-            profile: { select: { avatarUrl: true } },
+            id: true, firstName: true, lastName: true, avatarUrl: true,
           },
         },
         project: {

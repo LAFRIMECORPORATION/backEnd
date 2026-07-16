@@ -38,6 +38,9 @@ import feedRouter from "./modules/feed/feed.router.js";
 import adminRouter from "./modules/admin/admin.router.js";
 import dueDiligenceRouter from "./modules/due diligence/due diligence.router.js";
 import investorRequestsRouter from "./modules/investor requests/investor requests.router.js";
+import academyRouter from "./modules/academy/academy.router.js";
+import reportsRouter from "./modules/reports/reports.router.js";
+import pushRouter from "./modules/push/push.router.js";
 
 const allowedOrigins = [
   env.FRONTEND_URL,
@@ -100,6 +103,23 @@ app.use(
 // Rate limiting global
 app.use(globalLimiter);
 
+// ── Logging des requêtes HTTP ───────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  const { method, originalUrl, ip } = req;
+  const timestamp = new Date().toISOString();
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const { statusCode } = res;
+    const color = statusCode >= 400 ? '\x1b[31m' : statusCode >= 300 ? '\x1b[33m' : '\x1b[32m';
+    const reset = '\x1b[0m';
+    console.log(`${color}[${timestamp}]${reset} ${method} ${originalUrl} ${color}${statusCode}${reset} ${duration}ms - ${ip}`);
+  });
+
+  next();
+});
+
 // ── WEBHOOK STRIPE — doit être AVANT express.json() ──────────
 // Stripe requiert le corps brut (Buffer) pour vérifier la signature
 app.post(
@@ -149,6 +169,9 @@ app.get("/health", (_req, res) => {
       "Admin",
       "DueDiligence",
       "InvestorRequests",
+      "Academy",
+      "Reports",
+      "Push",
     ],
   });
 });
@@ -217,6 +240,9 @@ app.use("/api/collaborations", collaborationsRouter);
 app.use("/api/feed", feedRouter);
 app.use("/api/due-diligence", dueDiligenceRouter);
 app.use("/api/investor-requests", investorRequestsRouter);
+app.use("/api/academy", academyRouter);
+app.use("/api/reports", reportsRouter);
+app.use("/api/push", pushRouter);
 app.use("/api/admin", adminRouter);
 
 // ════════════════════════════════════════════════════════════
@@ -243,7 +269,7 @@ initSocket(io);
 // ════════════════════════════════════════════════════════════
 // DÉMARRAGE
 // ════════════════════════════════════════════════════════════
-const PORT = env.PORT || 3000;
+const PORT = env.PORT || 3001;
 
 async function start() {
   try {

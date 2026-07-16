@@ -10,25 +10,21 @@ import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
 // import { sendAppointmentEmail } from "../../utils/email.js"; // TODO: implémenter sendAppointmentEmail
 
-// ── Types de rendez-vous ──────────────────────────────────────
-export const APPOINTMENT_TYPES = ["pitch", "due_diligence", "suivi", "general"];
-
 // ════════════════════════════════════════════════════════════
 // CRÉER UN RENDEZ-VOUS
 // POST /api/appointments
 // ════════════════════════════════════════════════════════════
-export async function createAppointment(requesterId, {
-  inviteeId,
+export async function createAppointment(organizerId, {
+  participantId,
   projectId,
-  type,
   title,
-  description,
-  proposedSlots,   // [{ date, startTime, endTime }] — 3 créneaux proposés
-  meetingType,     // "video" | "phone" | "in_person"
+  scheduledAt,
+  durationMin = 45,
+  notes,
 }) {
   // Vérifier que l'invité existe
   const invitee = await prisma.user.findUnique({
-    where:  { id: inviteeId },
+    where:  { id: participantId },
     select: { id: true, firstName: true, email: true },
   });
   if (!invitee) throw new AppError("Utilisateur invité introuvable.", 404, "NOT_FOUND");
@@ -39,48 +35,34 @@ export async function createAppointment(requesterId, {
     if (!project) throw new AppError("Projet introuvable.", 404, "NOT_FOUND");
   }
 
-  // Créer le rendez-vous avec les créneaux proposés
+  // Créer le rendez-vous
   const appointment = await prisma.appointment.create({
     data: {
-      requesterId,
-      inviteeId,
+      organizerId,
+      participantId,
       projectId:   projectId || null,
-      type,
       title,
-      description: description || "",
-      meetingType: meetingType || "video",
+      scheduledAt:  scheduledAt ? new Date(scheduledAt) : null,
+      durationMin,
       status:      "pending",
-      slots: {
-        create: proposedSlots.slice(0, 3).map(s => ({
-          date:      new Date(s.date),
-          startTime: s.startTime,
-          endTime:   s.endTime,
-        })),
-      },
+      notes:        notes || null,
     },
     select: _appointmentSelect(),
   });
 
-  // Générer un lien Cal.com si configuré
-  if (env.CALCOM_API_KEY) {
-    generateCalcomLink(appointment.id, requesterId).catch(console.error);
-  }
-
   // Notifier l'invité
   const requester = await prisma.user.findUnique({
-    where:  { id: requesterId },
+    where:  { id: organizerId },
     select: { firstName: true, lastName: true },
   });
 
   createNotification({
-    userId:    inviteeId,
+    userId:    participantId,
     type:      "appointment",
     title:     "📅 Nouvelle demande de rendez-vous",
     body:      `${requester.firstName} ${requester.lastName} souhaite planifier un rendez-vous : "${title}"`,
     actionUrl: "/appointments",
   }).catch(console.error);
-
-  // sendAppointmentEmail(invitee, appointment, "request").catch(console.error);
 
   return appointment;
 }
@@ -97,16 +79,17 @@ export async function listAppointments(userId, { tab = "upcoming", page = 1, lim
   // Tab "pending"  → En attente de confirmation
   // Tab "past"     → RDV passés
   const where = {
-    OR: [{ requesterId: userId }, { inviteeId: userId }],
+    OR: [{ organizerId: userId }, { participantId: userId }],
     ...(tab === "upcoming" ? {
       status:      "confirmed",
-      confirmedAt: { gt: now },
+      scheduledAt: { gt: now },
     } : tab === "pending" ? {
       status: "pending",
     } : {
       OR: [
         { status: "completed" },
-        { status: "confirmed", confirmedAt: { lt: now } },
+        { status: "cancelled" },
+        { status: "confirmed", scheduledAt: { lt: now } },
       ],
     }),
   };
@@ -133,7 +116,7 @@ export async function getAppointment(appointmentId, userId) {
   const appt = await prisma.appointment.findFirst({
     where: {
       id: appointmentId,
-      OR: [{ requesterId: userId }, { inviteeId: userId }],
+      OR: [{ organizerId: userId }, { participantId: userId }],
     },
     select: _appointmentSelect(),
   });
@@ -143,24 +126,20 @@ export async function getAppointment(appointmentId, userId) {
 }
 
 // ════════════════════════════════════════════════════════════
-// CONFIRMER UN RENDEZ-VOUS (invité choisit un créneau)
+// CONFIRMER UN RENDEZ-VOUS
 // PUT /api/appointments/:id/confirm
 // ════════════════════════════════════════════════════════════
-export async function confirmAppointment(appointmentId, inviteeId, { slotId }) {
+export async function confirmAppointment(appointmentId, participantId) {
   const appt = await prisma.appointment.findFirst({
-    where:  { id: appointmentId, inviteeId, status: "pending" },
+    where:  { id: appointmentId, participantId, status: "pending" },
     select: {
-      id: true, title: true, requesterId: true,
-      requester: { select: { firstName: true, email: true } },
-      invitee:   { select: { firstName: true, email: true } },
-      slots:     { select: { id: true, date: true, startTime: true, endTime: true } },
+      id: true, title: true, organizerId: true, scheduledAt: true,
+      organizer: { select: { firstName: true, email: true } },
+      participant:   { select: { firstName: true, email: true } },
     },
   });
 
   if (!appt) throw new AppError("Rendez-vous introuvable ou non autorisé.", 404, "NOT_FOUND");
-
-  const slot = appt.slots.find(s => s.id === slotId);
-  if (!slot) throw new AppError("Créneau invalide.", 400, "INVALID_SLOT");
 
   // Générer un lien de meeting
   const meetingUrl = await generateMeetingLink(appointmentId);
@@ -168,9 +147,7 @@ export async function confirmAppointment(appointmentId, inviteeId, { slotId }) {
   const updated = await prisma.appointment.update({
     where: { id: appointmentId },
     data: {
-      status:       "confirmed",
-      confirmedAt:  new Date(`${slot.date.toISOString().split("T")[0]}T${slot.startTime}`),
-      confirmedSlot: slotId,
+      status:     "confirmed",
       meetingUrl,
     },
     select: _appointmentSelect(),
@@ -178,15 +155,12 @@ export async function confirmAppointment(appointmentId, inviteeId, { slotId }) {
 
   // Notifier le demandeur
   createNotification({
-    userId:    appt.requesterId,
+    userId:    appt.organizerId,
     type:      "appointment",
     title:     "✅ Rendez-vous confirmé !",
-    body:      `${appt.invitee.firstName} a confirmé votre rendez-vous "${appt.title}"`,
+    body:      `${appt.participant.firstName} a confirmé votre rendez-vous "${appt.title}"`,
     actionUrl: "/appointments",
   }).catch(console.error);
-
-  // sendAppointmentEmail(appt.requester, updated, "confirmed").catch(console.error);
-  // sendAppointmentEmail(appt.invitee,   updated, "confirmed").catch(console.error);
 
   // Programmer des rappels
   scheduleReminders(updated).catch(console.error);
@@ -198,21 +172,21 @@ export async function confirmAppointment(appointmentId, inviteeId, { slotId }) {
 // REFUSER UN RENDEZ-VOUS
 // PUT /api/appointments/:id/decline
 // ════════════════════════════════════════════════════════════
-export async function declineAppointment(appointmentId, inviteeId, reason) {
+export async function declineAppointment(appointmentId, participantId, reason) {
   const appt = await prisma.appointment.findFirst({
-    where:  { id: appointmentId, inviteeId, status: "pending" },
-    select: { id: true, requesterId: true, title: true },
+    where:  { id: appointmentId, participantId, status: "pending" },
+    select: { id: true, organizerId: true, title: true },
   });
 
   if (!appt) throw new AppError("Rendez-vous introuvable.", 404, "NOT_FOUND");
 
   await prisma.appointment.update({
     where: { id: appointmentId },
-    data:  { status: "declined", declineReason: reason || "" },
+    data:  { status: "cancelled", notes: reason || "" },
   });
 
   createNotification({
-    userId:    appt.requesterId,
+    userId:    appt.organizerId,
     type:      "appointment",
     title:     "❌ Rendez-vous refusé",
     body:      `Votre demande de rendez-vous "${appt.title}" a été refusée.`,
@@ -231,10 +205,10 @@ export async function cancelAppointment(appointmentId, userId, reason) {
     where: {
       id:     appointmentId,
       status: { in: ["pending", "confirmed"] },
-      OR:     [{ requesterId: userId }, { inviteeId: userId }],
+      OR:     [{ organizerId: userId }, { participantId: userId }],
     },
     select: {
-      id: true, title: true, requesterId: true, inviteeId: true,
+      id: true, title: true, organizerId: true, participantId: true,
     },
   });
 
@@ -242,11 +216,11 @@ export async function cancelAppointment(appointmentId, userId, reason) {
 
   await prisma.appointment.update({
     where: { id: appointmentId },
-    data:  { status: "cancelled", cancelReason: reason || "" },
+    data:  { status: "cancelled", notes: reason || "" },
   });
 
   // Notifier l'autre partie
-  const otherUserId = appt.requesterId === userId ? appt.inviteeId : appt.requesterId;
+  const otherUserId = appt.organizerId === userId ? appt.participantId : appt.organizerId;
   createNotification({
     userId:    otherUserId,
     type:      "appointment",
@@ -268,19 +242,16 @@ export async function getAvailability(userId) {
 
   const confirmedSlots = await prisma.appointment.findMany({
     where: {
-      OR:     [{ requesterId: userId }, { inviteeId: userId }],
-      status: "confirmed",
-      confirmedAt: { gt: new Date(), lt: thirtyDaysFromNow },
+      OR:         [{ organizerId: userId }, { participantId: userId }],
+      status:     "confirmed",
+      scheduledAt: { gt: new Date(), lt: thirtyDaysFromNow },
     },
-    select: { confirmedAt: true },
+    select: { scheduledAt: true },
   });
 
   return {
     userId,
-    busySlots: confirmedSlots.map(a => a.confirmedAt),
-    calcomUrl: env.CALCOM_API_KEY
-      ? `https://cal.com/launchpad/${userId}`
-      : null,
+    busySlots: confirmedSlots.map(a => a.scheduledAt),
   };
 }
 
@@ -296,35 +267,13 @@ async function generateMeetingLink(appointmentId) {
   return `https://meet.jit.si/launchpad-${roomId}`;
 }
 
-// Générer un lien Cal.com (si configuré)
-async function generateCalcomLink(appointmentId, userId) {
-  if (!env.CALCOM_API_KEY) return null;
-  try {
-    const res = await fetch("https://api.cal.com/v1/bookings", {
-      method:  "POST",
-      headers: {
-        Authorization:  `Bearer ${env.CALCOM_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ appointmentId, userId }),
-    });
-    const data = await res.json();
-    if (data?.booking?.id) {
-      await prisma.appointment.update({
-        where: { id: appointmentId },
-        data:  { calcomBookingId: data.booking.id },
-      });
-    }
-  } catch (err) {
-    console.error("Cal.com error:", err.message);
-  }
-}
+// generateCalcomLink supprimé - fonctionnalité non supportée par le schéma actuel
 
 // Programmer des rappels (J-1 et H-1)
 async function scheduleReminders(appointment) {
-  if (!appointment.confirmedAt) return;
+  if (!appointment.scheduledAt) return;
 
-  const apptTime     = new Date(appointment.confirmedAt).getTime();
+  const apptTime     = new Date(appointment.scheduledAt).getTime();
   const oneDayBefore = apptTime - 24 * 60 * 60 * 1000;
   const oneHrBefore  = apptTime - 60 * 60 * 1000;
   const now          = Date.now();
@@ -332,7 +281,7 @@ async function scheduleReminders(appointment) {
   // Rappel J-1
   if (oneDayBefore > now) {
     setTimeout(async () => {
-      for (const uid of [appointment.requesterId, appointment.inviteeId]) {
+      for (const uid of [appointment.organizerId, appointment.participantId]) {
         createNotification({
           userId:    uid,
           type:      "appointment",
@@ -347,7 +296,7 @@ async function scheduleReminders(appointment) {
   // Rappel H-1
   if (oneHrBefore > now) {
     setTimeout(async () => {
-      for (const uid of [appointment.requesterId, appointment.inviteeId]) {
+      for (const uid of [appointment.organizerId, appointment.participantId]) {
         createNotification({
           userId:    uid,
           type:      "appointment",
@@ -364,34 +313,27 @@ async function scheduleReminders(appointment) {
 function _appointmentSelect() {
   return {
     id:            true,
-    type:          true,
     title:         true,
-    description:   true,
     status:        true,
-    meetingType:   true,
+    scheduledAt:   true,
+    durationMin:   true,
     meetingUrl:    true,
-    confirmedAt:   true,
-    declineReason: true,
-    cancelReason:  true,
+    notes:         true,
+    reminderSent:  true,
     createdAt:     true,
-    requester: {
+    updatedAt:     true,
+    organizer: {
       select: {
-        id: true, firstName: true, lastName: true,
-        profile: { select: { avatarUrl: true } },
+        id: true, firstName: true, lastName: true, avatarUrl: true,
       },
     },
-    invitee: {
+    participant: {
       select: {
-        id: true, firstName: true, lastName: true,
-        profile: { select: { avatarUrl: true } },
+        id: true, firstName: true, lastName: true, avatarUrl: true,
       },
     },
     project: {
       select: { id: true, title: true },
-    },
-    slots: {
-      select: { id: true, date: true, startTime: true, endTime: true },
-      orderBy: { date: "asc" },
     },
   };
 }

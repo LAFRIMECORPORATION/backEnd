@@ -133,7 +133,7 @@ export async function listUsers({ search, role, kycStatus, page = 1, limit = 20 
         reputationScore:true,
         isActive:       true,
         createdAt:      true,
-        profile: { select: { avatarUrl: true } },
+        avatarUrl:      true,
         _count: {
           select: { projects: true, investments: true },
         },
@@ -203,7 +203,7 @@ export async function listProjectsAdmin({ status, page = 1, limit = 20 }) {
           select: {
             id: true, firstName: true, lastName: true,
             kycValidated: true,
-            profile: { select: { avatarUrl: true } },
+            avatarUrl: true,
           },
         },
         _count: { select: { investments: true } },
@@ -229,7 +229,7 @@ export async function approveProject(projectId, adminId, notes) {
 
   await prisma.project.update({
     where: { id: projectId },
-    data:  { status: "active", approvedAt: new Date(), approvedBy: adminId },
+    data:  { status: "active", approvedAt: new Date() },
   });
 
   await prisma.auditLog.create({
