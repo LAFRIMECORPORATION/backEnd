@@ -278,7 +278,7 @@ async function start() {
 
     // Lancement du serveur
     server.listen(PORT, () => {
-      console.log(`\n🚀 Launchpad API démarrée sur le port ${PORT}`);
+      console.log(`\n🚀 Launchpad API démarrée sur le bon port ${PORT}`);
       console.log(`📡 Health : http://localhost:${PORT}/health`);
       console.log(`⚡ Socket.io : actif`);
       console.log(
