@@ -217,7 +217,6 @@ app.use("/api/admin/kyc", kycRouter);
 
 // Projects
 app.use("/api/projects", projectsRouter);
-app.use("/api/admin/projects", projectsRouter);
 
 // Messages & Conversations
 app.use("/api", messagesRouter); // Monte /conversations + /messages
@@ -229,6 +228,8 @@ app.use("/api/escrow", escrowRouter); // Milestones + remboursements
 
 // ── Admin ────────────────────────────────────────────────────
 app.use("/api/admin/investments", adminInvestmentsRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/admin/projects", projectsRouter);
 // Les autres routes admin (KYC, projets, stats) sont dans leurs modules respectifs
 
 // ── Phase 6 ───────────────────────────────────────────────────
@@ -243,7 +244,6 @@ app.use("/api/investor-requests", investorRequestsRouter);
 app.use("/api/academy", academyRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/push", pushRouter);
-app.use("/api/admin", adminRouter);
 
 // ════════════════════════════════════════════════════════════
 // ROUTE 404

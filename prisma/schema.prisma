@@ -666,6 +666,9 @@ enum NotificationType {
 
 enum FeedEventType {
   project_published
+  project_approved
+  project_rejected
+  project_removed
   project_funded
   collaboration_formed
   badge_earned

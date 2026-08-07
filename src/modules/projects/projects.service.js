@@ -874,13 +874,13 @@ export async function approveProject(projectId, adminId, { note, featured } = {}
 
     await tx.feedEvent.create({
       data: {
-        actorId:    project.author.id,
-        eventType:  "project_published",
+        actorId:    adminId,
+        eventType:  "project_approved",
         entityType: "project",
         entityId:   projectId,
         projectId,
         categories: [p.category],
-        metadata:   { title: p.title, stage: p.stage },
+        metadata:   { title: p.title, stage: p.stage, ownerId: project.author.id },
       },
     });
 

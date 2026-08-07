@@ -12,7 +12,7 @@ export async function getFeed(userId, { filter = "all", page = 1, limit = 20 }) 
 
   // Mapping filter vers les valeurs enum FeedEventType
   const eventTypeMap = {
-    projects: ["project_published", "project_funded", "project_view"],
+    projects: ["project_published", "project_approved", "project_rejected", "project_removed", "project_funded", "project_view"],
     investments: ["investment_made"],
     forum: [],
     collaborations: ["collaboration_formed"],
@@ -23,6 +23,13 @@ export async function getFeed(userId, { filter = "all", page = 1, limit = 20 }) 
     ...(filter !== "all" && eventTypeMap[filter] ? { 
       eventType: { in: eventTypeMap[filter] } 
     } : {}),
+    AND: [{
+      OR: [
+        { eventType: { notIn: ["project_published", "project_approved", "project_rejected", "project_removed", "project_funded", "project_view"] } },
+        { eventType: { in: ["project_published", "project_funded", "project_view", "project_approved"] }, project: { status: { in: ["active", "funded"] } } },
+        { eventType: { in: ["project_rejected", "project_removed"] } },
+      ],
+    }],
   };
 
   const [events, total] = await Promise.all([

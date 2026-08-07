@@ -63,7 +63,24 @@ export async function getAuditLogs(req, res, next) {
       page:   parseInt(req.query.page)  || 1,
       limit:  parseInt(req.query.limit) || 50,
       action: req.query.action,
+      adminId: req.query.adminId,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
     });
     return success(res, result);
+  } catch (err) { next(err); }
+}
+
+export async function deleteUser(req, res, next) {
+  try {
+    const result = await svc.deleteUser(req.params.id, req.user.id, req.body?.reason);
+    return success(res, result, "Utilisateur supprimé de la plateforme.");
+  } catch (err) { next(err); }
+}
+
+export async function deleteProject(req, res, next) {
+  try {
+    const result = await svc.deleteProject(req.params.id, req.user.id, req.body?.reason);
+    return success(res, result, "Projet retiré de la plateforme.");
   } catch (err) { next(err); }
 }

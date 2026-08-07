@@ -12,15 +12,17 @@ import { AppError } from "./errorHandler.js";
 
 // ── Guard de rôle ─────────────────────────────────────────
 export function requireRole(...roles) {
+  const allowedRoles = roles.flat();
+
   return (req, res, next) => {
     if (!req.user) {
       return next(new AppError("Non authentifié.", 401, "UNAUTHORIZED"));
     }
 
-    if (!roles.includes(req.user.role)) {
+    if (!allowedRoles.includes(req.user.role)) {
       return next(
         new AppError(
-          `Accès refusé. Rôle requis : ${roles.join(" ou ")}.`,
+          `Accès refusé. Rôle requis : ${allowedRoles.join(" ou ")}.`,
           403,
           "FORBIDDEN"
         )

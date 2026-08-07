@@ -6,6 +6,7 @@
 import prisma from "../../config/database.js";
 import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
+import { randomUUID } from "node:crypto";
 
 // ════════════════════════════════════════════════════════════
 // STATISTIQUES GLOBALES
@@ -62,6 +63,21 @@ export async function getStatistics() {
     orderBy:{ _count: { id: "desc" } },
   });
 
+  const [projectsByStatus, kycByStatus, investmentsByStatus] = await Promise.all([
+    prisma.project.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+    prisma.user.groupBy({
+      by: ["kycStatus"],
+      _count: { id: true },
+    }),
+    prisma.investment.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+  ]);
+
   // Croissance utilisateurs sur 7 derniers jours
   const growthData = await prisma.$queryRaw`
     SELECT DATE("created_at")::text as date, COUNT(*)::int as count
@@ -84,11 +100,16 @@ export async function getStatistics() {
       active:     activeProjects,
       pending:    pendingProjects,
       byCategory: projectsByCategory.map(c => ({ category: c.category, count: c._count.id })),
+      byStatus:   projectsByStatus.map(s => ({ status: s.status, count: s._count.id })),
     },
     investments: {
       total:       totalInvestments,
       totalVolume: Number(totalVolume._sum.amount || 0),
       revenue30d:  Number(revenueStats._sum.platformFee || 0),
+      byStatus:    investmentsByStatus.map(s => ({ status: s.status, count: s._count.id })),
+    },
+    kyc: {
+      byStatus: kycByStatus.map(s => ({ status: s.kycStatus, count: s._count.id })),
     },
     community: {
       totalMessages,
@@ -189,7 +210,71 @@ export async function toggleUserStatus(userId, adminId, reason) {
     },
   });
 
+  await createNotification({
+    userId,
+    type: "system",
+    title: updated.isActive ? "✅ Compte réactivé" : "⚠️ Compte suspendu",
+    body: updated.isActive
+      ? "Votre compte Launchpad a été réactivé par l'administration."
+      : `Votre compte Launchpad a été suspendu par l'administration.${reason ? ` Motif : ${reason}` : ""}`,
+    actionUrl: "/",
+  });
+
   return updated;
+}
+
+// ════════════════════════════════════════════════════════════
+// SUPPRIMER UN UTILISATEUR (anonymisation irréversible)
+// Les données liées aux investissements et à l'audit sont conservées
+// pour l'intégrité comptable, mais les données personnelles sont effacées.
+// ════════════════════════════════════════════════════════════
+export async function deleteUser(userId, adminId, reason) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, isActive: true },
+  });
+
+  if (!user) throw new AppError("Utilisateur introuvable.", 404, "NOT_FOUND");
+  if (user.role === "admin") {
+    throw new AppError("La suppression d'un compte administrateur est interdite.", 403, "FORBIDDEN");
+  }
+
+  const deletedEmail = `deleted-${randomUUID()}@launchpad.invalid`;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.kycDocument.deleteMany({ where: { userId } });
+    await tx.kycFormData.deleteMany({ where: { userId } });
+    await tx.userProfile.deleteMany({ where: { userId } });
+    await tx.refreshToken.deleteMany({ where: { userId } });
+    await tx.pushSubscription.deleteMany({ where: { userId } });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        email: deletedEmail,
+        passwordHash: `deleted-${randomUUID()}`,
+        firstName: "Utilisateur",
+        lastName: "supprime",
+        avatarUrl: null,
+        bio: null,
+        isActive: false,
+        isVerified: false,
+        kycValidated: false,
+        kycStatus: "rejected",
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: "USER_DELETED",
+        entityType: "user",
+        entityId: userId,
+        oldValues: { email: user.email, role: user.role, isActive: user.isActive },
+        newValues: { anonymized: true, reason: reason || null },
+      },
+    });
+  });
+
+  return { deleted: true, userId, anonymized: true };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -198,7 +283,7 @@ export async function toggleUserStatus(userId, adminId, reason) {
 // ════════════════════════════════════════════════════════════
 export async function listProjectsAdmin({ status, page = 1, limit = 20 }) {
   const skip  = (page - 1) * limit;
-  const where = status ? { status } : {};
+  const where = status && status !== "all" ? { status } : {};
 
   const [projects, total] = await Promise.all([
     prisma.project.findMany({
@@ -209,14 +294,22 @@ export async function listProjectsAdmin({ status, page = 1, limit = 20 }) {
       select: {
         id:           true,
         title:        true,
+        description:  true,
         category:     true,
+        stage:        true,
         status:       true,
         goalAmount:   true,
         raisedAmount: true,
+        equityPct:    true,
+        deadline:     true,
+        coverImageUrl:true,
+        pitchDeckUrl: true,
+        demoVideoUrl: true,
+        githubUrl:    true,
         createdAt:    true,
         author: {
           select: {
-            id: true, firstName: true, lastName: true,
+            id: true, firstName: true, lastName: true, email: true,
             kycValidated: true,
             avatarUrl: true,
           },
@@ -262,17 +355,17 @@ export async function approveProject(projectId, adminId, notes) {
     type:      "system",
     title:     "🎉 Votre projet est en ligne !",
     body:      `"${project.title}" a été validé et est maintenant visible par les investisseurs.`,
-    actionUrl: `/project/${projectId}`,
+    actionUrl: `/projects/${projectId}`,
   });
 
   await prisma.feedEvent.create({
     data: {
-      actorId:    project.authorId,
-      eventType:  "project_published",
+      actorId:    adminId,
+      eventType:  "project_approved",
       entityType: "project",
       entityId:   projectId,
       projectId,
-      metadata:   { title: project.title },
+      metadata:   { title: project.title, ownerId: project.authorId },
     },
   }).catch(console.error);
 
@@ -314,16 +407,90 @@ export async function rejectProject(projectId, adminId, reason) {
     actionUrl: `/publish`,
   });
 
+  await prisma.feedEvent.create({
+    data: {
+      actorId: adminId,
+      eventType: "project_rejected",
+      entityType: "project",
+      entityId: projectId,
+      projectId,
+      metadata: { title: project.title, ownerId: project.authorId, reason },
+    },
+  }).catch(console.error);
+
   return { rejected: true, projectId };
+}
+
+// ════════════════════════════════════════════════════════════
+// RETIRER UN PROJET (soft delete administratif)
+// ════════════════════════════════════════════════════════════
+export async function deleteProject(projectId, adminId, reason) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, title: true, status: true, authorId: true },
+  });
+
+  if (!project) throw new AppError("Projet introuvable.", 404, "NOT_FOUND");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: "rejected",
+        rejectedAt: new Date(),
+        rejectionReason: reason || "Projet retiré par un administrateur.",
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: "PROJECT_DELETED",
+        entityType: "project",
+        entityId: projectId,
+        oldValues: { status: project.status },
+        newValues: { status: "rejected", reason: reason || null },
+      },
+    });
+  });
+
+  await createNotification({
+    userId: project.authorId,
+    type: "system",
+    title: "⚠️ Votre projet a été retiré",
+    body: `Votre projet « ${project.title} » n'est plus affiché comme publié. Motif : ${reason || "Retrait administratif."}`,
+    actionUrl: "/dashboard/student",
+  });
+
+  await prisma.feedEvent.create({
+    data: {
+      actorId: adminId,
+      eventType: "project_removed",
+      entityType: "project",
+      entityId: projectId,
+      projectId,
+      metadata: { title: project.title, ownerId: project.authorId, reason },
+    },
+  }).catch(console.error);
+
+  return { deleted: true, projectId, softDeleted: true };
 }
 
 // ════════════════════════════════════════════════════════════
 // LOGS D'AUDIT
 // GET /api/admin/audit-logs
 // ════════════════════════════════════════════════════════════
-export async function getAuditLogs({ page = 1, limit = 50, action }) {
+export async function getAuditLogs({ page = 1, limit = 50, action, adminId, startDate, endDate }) {
   const skip  = (page - 1) * limit;
-  const where = action ? { action } : {};
+  const where = {
+    ...(action ? { action } : {}),
+    ...(adminId ? { actorId: adminId } : {}),
+    ...((startDate || endDate) ? {
+      createdAt: {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lte: new Date(endDate) } : {}),
+      },
+    } : {}),
+  };
 
   const [logs, total] = await Promise.all([
     prisma.auditLog.findMany({
