@@ -33,6 +33,7 @@ model User {
   conversations1       Conversation[]       @relation("ConvUser1")
   conversations2       Conversation[]       @relation("ConvUser2")
   feedEvents           FeedEvent[]
+  feedEventReads       FeedEventRead[]
   forumPostLikes       ForumPostLike[]
   forumPosts           ForumPost[]
   investments          Investment[]
@@ -514,8 +515,22 @@ model FeedEvent {
   createdAt  DateTime      @default(now()) @map("created_at")
   actor      User          @relation(fields: [actorId], references: [id], onDelete: Cascade)
   project    Project?      @relation(fields: [projectId], references: [id])
+  reads      FeedEventRead[]
 
   @@map("feed_events")
+}
+
+model FeedEventRead {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  eventId   String    @map("event_id")
+  readAt    DateTime  @default(now()) @map("read_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     FeedEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@map("feed_event_reads")
 }
 
 model Notification {
