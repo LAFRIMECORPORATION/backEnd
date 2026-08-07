@@ -14,6 +14,28 @@ export const FORUM_CATEGORIES = [
   "marketing", "success-stories", "questions", "annonces",
 ];
 
+// ── Initialisation des catégories par défaut ─────────────────────
+export async function initializeCategories() {
+  const categories = [
+    { name: "general", description: "Discussions générales", icon: "chat" },
+    { name: "financement", description: "Questions sur le financement", icon: "dollar" },
+    { name: "juridique", description: "Conseils juridiques", icon: "scale" },
+    { name: "tech", description: "Technologie et développement", icon: "code" },
+    { name: "marketing", description: "Stratégies marketing", icon: "megaphone" },
+    { name: "success-stories", description: "Histoires de succès", icon: "star" },
+    { name: "questions", description: "Questions diverses", icon: "help" },
+    { name: "annonces", description: "Annonces importantes", icon: "bell" },
+  ];
+
+  for (const cat of categories) {
+    await prisma.forumCategory.upsert({
+      where: { name: cat.name },
+      update: {},
+      create: cat,
+    });
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 // CRÉER UN POST
 // POST /api/forum/posts
@@ -23,13 +45,31 @@ export async function createPost(authorId, { title, content, category, tags = []
     throw new AppError(`Catégorie invalide. Valeurs acceptées : ${FORUM_CATEGORIES.join(", ")}`, 400, "INVALID_CATEGORY");
   }
 
+  // Trouver ou créer la catégorie par son nom
+  let categoryRecord = await prisma.forumCategory.findUnique({
+    where: { name: category },
+    select: { id: true },
+  });
+
+  if (!categoryRecord) {
+    // Créer la catégorie si elle n'existe pas
+    const categoryData = {
+      name: category,
+      description: `Catégorie ${category}`,
+      icon: "comment",
+    };
+    categoryRecord = await prisma.forumCategory.create({
+      data: categoryData,
+      select: { id: true },
+    });
+  }
+
   const post = await prisma.forumPost.create({
     data: {
       authorId,
+      categoryId: categoryRecord.id,
       title:    title.trim(),
       content:  content.trim(),
-      category,
-      tags,
     },
     select: _postSelect(authorId),
   });
@@ -63,7 +103,7 @@ export async function listPosts(userId, { category, search, sort = "recent", pag
 
   const where = {
     isDeleted: false,
-    ...(category && category !== "all" ? { category } : {}),
+    ...(category && category !== "all" ? { category: { name: category } } : {}),
     ...(search ? {
       OR: [
         { title:   { contains: search, mode: "insensitive" } },
@@ -175,26 +215,25 @@ export async function deletePost(postId, userId, userRole) {
 }
 
 // ════════════════════════════════════════════════════════════
-// LIKER / UNLIKER UN POST
+// LIKE / UNLIKE UN POST
 // POST /api/forum/posts/:id/like
 // ════════════════════════════════════════════════════════════
-export async function toggleLike(postId, userId) {
-  const post = await prisma.forumPost.findFirst({
-    where: { id: postId, isDeleted: false },
+export async function togglePostLike(postId, userId) {
+  const post = await prisma.forumPost.findUnique({
+    where: { id: postId },
     select: { id: true, authorId: true, likesCount: true },
   });
 
   if (!post) throw new AppError("Post introuvable.", 404, "NOT_FOUND");
 
-  // Vérifier si déjà liké via la relation likes (CommentLike réutilisé pour ForumPost)
-  const existing = await prisma.commentLike.findFirst({
-    where: { userId, commentId: postId },
+  const existing = await prisma.forumPostLike.findFirst({
+    where: { userId, postId },
   });
 
   if (existing) {
     // Unlike
     await prisma.$transaction([
-      prisma.commentLike.delete({ where: { id: existing.id } }),
+      prisma.forumPostLike.delete({ where: { id: existing.id } }),
       prisma.forumPost.update({
         where: { id: postId },
         data:  { likesCount: { decrement: 1 } },
@@ -204,13 +243,12 @@ export async function toggleLike(postId, userId) {
   } else {
     // Like
     await prisma.$transaction([
-      prisma.commentLike.create({ data: { userId, commentId: postId } }),
+      prisma.forumPostLike.create({ data: { userId, postId } }),
       prisma.forumPost.update({
         where: { id: postId },
         data:  { likesCount: { increment: 1 } },
       }),
     ]);
-
     // Notifier l'auteur (pas si c'est lui-même)
     if (post.authorId !== userId) {
       createNotification({
@@ -229,37 +267,39 @@ export async function toggleLike(postId, userId) {
 // ════════════════════════════════════════════════════════════
 // AJOUTER UNE RÉPONSE
 // POST /api/forum/posts/:id/replies
-// ═══════════════════════════════════════════════════════════�
+// ═══════════════════════════════════════════════════════════
 export async function addReply(postId, authorId, { content, parentReplyId }) {
-  const post = await prisma.forumPost.findFirst({
-    where:  { id: postId, isDeleted: false },
-    select: { id: true, authorId: true, title: true },
+  // Retrieve the post (or parent reply) to get category and ensure it exists
+  const parent = await prisma.forumPost.findFirst({
+    where: { id: parentReplyId ? parentReplyId : postId, isDeleted: false },
+    select: { id: true, authorId: true, title: true, categoryId: true },
   });
 
-  if (!post) throw new AppError("Post introuvable.", 404, "NOT_FOUND");
+  if (!parent) throw new AppError("Post ou réponse introuvable.", 404, "NOT_FOUND");
 
-  // Utiliser ForumPost avec parent pour les réponses (auto-référence)
+  // Create the reply, linking to the author via authorId and preserving the category
   const reply = await prisma.forumPost.create({
     data: {
       authorId,
-      categoryId: post.categoryId,
-      parentId: postId,
+      categoryId: parent.categoryId,
+      parentId: parent.id,
       content: content.trim(),
     },
     select: _postSelect(authorId),
   });
 
-  // Incrémenter le compteur de réponses (manquant dans schéma, on utilise un compteur dérivé)
-  const repliesCount = await prisma.forumPost.count({ where: { parentId: postId, isDeleted: false } });
-  
-  // Notifier l'auteur du post
-  if (post.authorId !== authorId) {
+  // Recompute replies count for the original top‑level post
+  const topPostId = parentReplyId ? postId : parent.id;
+  const repliesCount = await prisma.forumPost.count({ where: { parentId: topPostId, isDeleted: false } });
+
+  // Notify the author of the top‑level post if someone else replied
+  if (parent.authorId !== authorId) {
     createNotification({
-      userId:    post.authorId,
+      userId:    parent.authorId,
       type:      "forum",
       title:     "💬 Nouvelle réponse à votre post",
-      body:      `Quelqu'un a répondu à votre post "${post.title.substring(0, 50)}"`,
-      actionUrl: `/forum/${postId}`,
+      body:      `Quelqu'un a répondu à votre post "${parent.title.substring(0, 50)}"`,
+      actionUrl: `/forum/${topPostId}`,
     }).catch(console.error);
   }
 
@@ -278,20 +318,19 @@ export async function toggleReplyLike(replyId, userId) {
 
   if (!reply) throw new AppError("Réponse introuvable.", 404, "NOT_FOUND");
 
-  // Réutiliser CommentLike pour les likes de réponses forum
-  const existing = await prisma.commentLike.findFirst({
-    where: { userId, commentId: replyId },
+  const existing = await prisma.forumPostLike.findFirst({
+    where: { userId, postId: replyId },
   });
 
   if (existing) {
     await prisma.$transaction([
-      prisma.commentLike.delete({ where: { id: existing.id } }),
+      prisma.forumPostLike.delete({ where: { id: existing.id } }),
       prisma.forumPost.update({ where: { id: replyId }, data: { likesCount: { decrement: 1 } } }),
     ]);
     return { liked: false, likesCount: reply.likesCount - 1 };
   } else {
     await prisma.$transaction([
-      prisma.commentLike.create({ data: { userId, commentId: replyId } }),
+      prisma.forumPostLike.create({ data: { userId, postId: replyId } }),
       prisma.forumPost.update({ where: { id: replyId }, data: { likesCount: { increment: 1 } } }),
     ]);
     return { liked: true, likesCount: reply.likesCount + 1 };

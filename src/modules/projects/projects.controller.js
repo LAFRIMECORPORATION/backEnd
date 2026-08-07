@@ -154,7 +154,7 @@ export async function getComments(req, res, next) {
   try {
     const { page, limit } = getPagination(req.query);
     const { comments, total } = await projectsService.getComments(
-      req.params.id, { page, limit }
+      req.params.id, { page, limit }, req.user?.id
     );
     return paginated(res, { data: comments, page, limit, total });
   } catch (error) { next(error); }

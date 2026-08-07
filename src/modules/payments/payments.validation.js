@@ -1,72 +1,106 @@
 // ============================================================
 // LAUNCHPAD — payments/payments.validation.js
-// Validation Zod pour les routes de paiement et escrow
+// Validation Zod de tous les inputs paiement
 // ============================================================
 
-import { z } from "zod";
+import { z }        from "zod";
+import { AppError } from "../../middleware/errorHandler.js";
 
-export const initMtnSchema = z.object({
-  projectId: z.string({ required_error: "L'ID du projet est requis." }).uuid("ID de projet invalide."),
-  amount: z.number({ required_error: "Le montant est requis." }).positive("Le montant doit être positif."),
-  phoneNumber: z.string({ required_error: "Le numéro de téléphone est requis." }).min(8, "Numéro de téléphone invalide."),
-});
-
-export const initOrangeSchema = z.object({
-  projectId: z.string({ required_error: "L'ID du projet est requis." }).uuid("ID de projet invalide."),
-  amount: z.number({ required_error: "Le montant est requis." }).positive("Le montant doit être positif."),
-  phoneNumber: z.string({ required_error: "Le numéro de téléphone est requis." }).min(8, "Numéro de téléphone invalide."),
-});
-
-export const initStripeSchema = z.object({
-  projectId: z.string({ required_error: "L'ID du projet est requis." }).uuid("ID de projet invalide."),
-  amount: z.number({ required_error: "Le montant est requis." }).positive("Le montant doit être positif."),
-  currency: z.string().optional(),
-});
-
-export const createMilestoneSchema = z.object({
-  title: z.string({ required_error: "Le titre est requis." }).min(3, "Le titre doit faire au moins 3 caractères."),
-  description: z.string().optional(),
-  amountToRelease: z.number({ required_error: "Le montant à libérer est requis." }).positive("Le montant doit être positif."),
-  dueDate: z.string({ required_error: "La date d'échéance est requise." }),
-});
-
-export const validateMilestoneSchema = z.object({
-  notes: z.string().optional(),
-});
-
-export const refundInvestmentSchema = z.object({
-  reason: z.string({ required_error: "Le motif du remboursement est requis." }).min(5, "Le motif doit faire au moins 5 caractères."),
-});
-
+// ── Helper : exécuter la validation et passer au next ────────
 function validate(schema) {
-  return (req, res, next) => {
+  return (req, _res, next) => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
-      const errors = result.error.errors.map((error) => ({
-        field: error.path.join("."),
-        message: error.message,
-      }));
-      return res.status(400).json({
-        success: false,
-        error: "VALIDATION_ERROR",
-        message: errors[0]?.message || "Données invalides.",
-        errors,
-      });
+      const message = result.error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join(", ");
+      return next(new AppError(message, 400, "VALIDATION_ERROR"));
     }
     req.body = result.data;
     next();
   };
 }
 
-// Exports pour compatibilité
-export const validateInitMtn = validate(initMtnSchema);
-export const validateInitOrange = validate(initOrangeSchema);
-export const validateInitStripe = validate(initStripeSchema);
+// ── Montants XAF ─────────────────────────────────────────────
+// Min : 5 000 XAF (~8€) — Max : 50 000 000 XAF (~75k€)
+const amountSchema = z
+  .number({ required_error: "Le montant est requis." })
+  .int("Le montant doit être un entier (en XAF).")
+  .min(5_000,  "Le montant minimum est de 5 000 XAF.")
+  .max(50_000_000, "Le montant maximum est de 50 000 000 XAF.");
 
-// Exports attendus par payments.router.js
-export const initMtn = validate(initMtnSchema);
-export const initOrange = validate(initOrangeSchema);
-export const initStripe = validate(initStripeSchema);
-export const createMilestone = validate(createMilestoneSchema);
-export const validateMilestone = validate(validateMilestoneSchema);
-export const refundInvestment = validate(refundInvestmentSchema);
+// ── Numéro de téléphone camerounais ──────────────────────────
+// Format : 6XXXXXXXX (9 chiffres sans le +237)
+const phoneSchema = z
+  .string()
+  .regex(/^6[2-9]\d{7}$/, "Numéro invalide. Format attendu : 6XXXXXXXX (sans +237).");
+
+// ────────────────────────────────────────────────────────────
+// MTN Mobile Money
+// ────────────────────────────────────────────────────────────
+export const initMtn = validate(
+  z.object({
+    projectId:   z.string().uuid("projectId invalide."),
+    amount:      amountSchema,
+    phoneNumber: phoneSchema,
+  })
+);
+
+// ────────────────────────────────────────────────────────────
+// Orange Money
+// ────────────────────────────────────────────────────────────
+export const initOrange = validate(
+  z.object({
+    projectId:   z.string().uuid("projectId invalide."),
+    amount:      amountSchema,
+    phoneNumber: phoneSchema,
+  })
+);
+
+// ────────────────────────────────────────────────────────────
+// Stripe
+// ────────────────────────────────────────────────────────────
+export const initStripe = validate(
+  z.object({
+    projectId: z.string().uuid("projectId invalide."),
+    amount:    amountSchema,
+    currency:  z.enum(["XAF", "EUR", "USD"]).default("XAF"),
+  })
+);
+
+// ────────────────────────────────────────────────────────────
+// Escrow — Créer un milestone
+// ────────────────────────────────────────────────────────────
+export const createMilestone = validate(
+  z.object({
+    title:           z.string().min(3).max(100),
+    description:     z.string().max(500).optional(),
+    amountToRelease: z
+      .number()
+      .int()
+      .positive("Le montant à libérer doit être positif."),
+    dueDate: z
+      .string()
+      .datetime("Format date invalide. Utiliser ISO 8601.")
+      .refine(d => new Date(d) > new Date(), "La date doit être dans le futur."),
+  })
+);
+
+// ────────────────────────────────────────────────────────────
+// Escrow — Valider un milestone
+// ────────────────────────────────────────────────────────────
+export const validateMilestone = validate(
+  z.object({
+    notes: z.string().max(500).optional(),
+  })
+);
+
+// ────────────────────────────────────────────────────────────
+// Escrow — Rembourser un investissement
+// ────────────────────────────────────────────────────────────
+export const refundInvestment = validate(
+  z.object({
+    reason: z
+      .string()
+      .min(10, "La raison du remboursement doit faire au moins 10 caractères.")
+      .max(500),
+  })
+);

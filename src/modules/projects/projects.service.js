@@ -338,6 +338,37 @@ export async function getProjectById(id, viewerId = null) {
     isSaved = !!save;
   }
 
+  // Calculer likedByMe pour les commentaires et leurs réponses si viewerId est fourni
+  const enrichedComments = await Promise.all(project.comments.map(async (comment) => {
+    let likedByMe = false;
+    let enrichedReplies = comment.replies;
+
+    if (viewerId) {
+      const [commentLike, replyLikes] = await Promise.all([
+        prisma.commentLike.findUnique({
+          where: { userId_commentId: { userId: viewerId, commentId: comment.id } },
+        }),
+        Promise.all(comment.replies.map(reply =>
+          prisma.commentLike.findUnique({
+            where: { userId_commentId: { userId: viewerId, commentId: reply.id } },
+          })
+        ))
+      ]);
+
+      likedByMe = !!commentLike;
+      enrichedReplies = comment.replies.map((reply, index) => ({
+        ...reply,
+        likedByMe: !!replyLikes[index]
+      }));
+    }
+
+    return {
+      ...comment,
+      likedByMe,
+      replies: enrichedReplies
+    };
+  }));
+
   return {
     ...project,
     goalAmount:    Number(project.goalAmount),
@@ -346,6 +377,7 @@ export async function getProjectById(id, viewerId = null) {
     likedByMe:     isLiked,
     isSaved,
     commentsCount: project._count?.comments || 0,
+    comments:      enrichedComments,
   };
 }
 
@@ -611,7 +643,7 @@ export async function addComment(projectId, authorId, { content, parentId }) {
 // ════════════════════════════════════════════════════════════
 // LISTER LES COMMENTAIRES D'UN PROJET
 // ════════════════════════════════════════════════════════════
-export async function getComments(projectId, { page = 1, limit = 20 }) {
+export async function getComments(projectId, { page = 1, limit = 20 }, viewerId = null) {
   const skip = (page - 1) * limit;
 
   const [comments, total] = await Promise.all([
@@ -636,7 +668,7 @@ export async function getComments(projectId, { page = 1, limit = 20 }) {
           select: {
             id:         true,
             content:    true,
-            parentId:   true, // 🛡️ FIX : Crucial pour l'arbre des réponses imbriquées côté React front-end
+            parentId:   true,
             likesCount: true,
             createdAt:  true,
             author: {
@@ -651,7 +683,38 @@ export async function getComments(projectId, { page = 1, limit = 20 }) {
     prisma.comment.count({ where: { projectId, parentId: null, isDeleted: false } }),
   ]);
 
-  return { comments, total };
+  // Calculer likedByMe pour chaque commentaire et ses réponses si viewerId est fourni
+  const enrichedComments = await Promise.all(comments.map(async (comment) => {
+    let likedByMe = false;
+    let enrichedReplies = comment.replies;
+
+    if (viewerId) {
+      const [commentLike, replyLikes] = await Promise.all([
+        prisma.commentLike.findUnique({
+          where: { userId_commentId: { userId: viewerId, commentId: comment.id } },
+        }),
+        Promise.all(comment.replies.map(reply =>
+          prisma.commentLike.findUnique({
+            where: { userId_commentId: { userId: viewerId, commentId: reply.id } },
+          })
+        ))
+      ]);
+
+      likedByMe = !!commentLike;
+      enrichedReplies = comment.replies.map((reply, index) => ({
+        ...reply,
+        likedByMe: !!replyLikes[index]
+      }));
+    }
+
+    return {
+      ...comment,
+      likedByMe,
+      replies: enrichedReplies
+    };
+  }));
+
+  return { comments: enrichedComments, total };
 }
 
 // ════════════════════════════════════════════════════════════

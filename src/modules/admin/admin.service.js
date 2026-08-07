@@ -31,7 +31,7 @@ export async function getStatistics() {
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: day30 } } }),
-    prisma.project.count(),
+    prisma.project.count({ where: { status: { in: ["active", "funded"] } } }),
     prisma.project.count({ where: { status: "active" } }),
     prisma.project.count({ where: { status: "pending" } }),
     prisma.investment.count({ where: { status: { in: ["in_escrow", "released"] } } }),
@@ -142,7 +142,22 @@ export async function listUsers({ search, role, kycStatus, page = 1, limit = 20 
     prisma.user.count({ where }),
   ]);
 
-  return { users, total, page, totalPages: Math.ceil(total / limit) };
+    // Add count of approved projects per user (status active or funded)
+  const usersWithApprovedCount = await Promise.all(
+    users.map(async (user) => ({
+      ...user,
+      approvedProjectsCount: await prisma.project.count({
+        where: { authorId: user.id, status: { in: ["active", "funded"] } },
+      }),
+    }))
+  );
+
+  return {
+    users: usersWithApprovedCount,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
 }
 
 // ════════════════════════════════════════════════════════════

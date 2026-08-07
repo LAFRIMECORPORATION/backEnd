@@ -47,7 +47,7 @@ export async function deletePost(req, res, next) {
 
 export async function toggleLike(req, res, next) {
   try {
-    const result = await forumService.toggleLike(req.params.id, req.user.id);
+    const result = await forumService.togglePostLike(req.params.id, req.user.id);
     return success(res, result);
   } catch (err) { next(err); }
 }
