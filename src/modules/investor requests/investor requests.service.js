@@ -144,32 +144,54 @@ export async function applyToRequest(requestId, applicantId, { message, projectI
     throw new AppError("Vous ne pouvez pas postuler à votre propre offre.", 400, "SELF_APPLY");
   }
 
-  // Vérifier doublon
+  // Une seule candidature active par étudiant et par offre.
+  // Une candidature rejetée peut être renvoyée.
   const existing = await prisma.requestApplication.findUnique({
     where: { 
       requestId_applicantId: { requestId, applicantId }
     },
   });
-  if (existing) throw new AppError("Vous avez déjà postulé à cette offre.", 409, "DUPLICATE");
+  const coverMessage = projectId
+    ? `[Projet: ${projectId}] ${message?.trim() || ""}`
+    : message?.trim() || null;
 
-  const application = await prisma.requestApplication.create({
-    data: {
-      requestId,
-      applicantId,
-      coverMessage: projectId ? `[Projet: ${projectId}] ${message?.trim() || ""}` : message?.trim() || null,
-      status:    "pending",
-    },
-    select: {
-      id: true, status: true, coverMessage: true, createdAt: true,
-      applicant: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
-    },
-  });
+  if (existing && existing.status !== "rejected") {
+    throw new AppError(
+      existing.status === "accepted"
+        ? "Votre candidature a déjà été acceptée pour cette offre."
+        : "Vous avez déjà une candidature en attente pour cette offre.",
+      409,
+      "DUPLICATE",
+    );
+  }
+
+  const application = existing
+    ? await prisma.requestApplication.update({
+      where: { id: existing.id },
+      data: { coverMessage, status: "pending" },
+      select: {
+        id: true, status: true, coverMessage: true, createdAt: true,
+        applicant: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
+    })
+    : await prisma.requestApplication.create({
+      data: {
+        requestId,
+        applicantId,
+        coverMessage,
+        status: "pending",
+      },
+      select: {
+        id: true, status: true, coverMessage: true, createdAt: true,
+        applicant: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      },
+    });
 
   // Notifier l'investisseur
   await createNotification({
     userId:    request.authorId,
     type:      "investment",
-    title:     "📩 Nouvelle candidature reçue",
+    title:     existing ? "📩 Candidature renvoyée" : "📩 Nouvelle candidature reçue",
     body:      `${application.applicant.firstName} a postulé à votre offre "${request.title}"`,
     actionUrl: `/investor-requests/${requestId}`,
   });

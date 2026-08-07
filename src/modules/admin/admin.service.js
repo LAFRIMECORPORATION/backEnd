@@ -513,3 +513,108 @@ export async function getAuditLogs({ page = 1, limit = 50, action, adminId, star
 
   return { logs, total, page };
 }
+
+export async function getMarketplaceOverview() {
+  const [offers, applications, byOfferStatus, byApplicationStatus] = await Promise.all([
+    prisma.investorRequest.findMany({
+      where: { status: { not: "deleted" } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true, title: true, description: true, reqType: true,
+        status: true, createdAt: true, duration: true, budget: true,
+        author: { select: { id: true, firstName: true, lastName: true, email: true } },
+        _count: { select: { applications: true } },
+        applications: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true, status: true, coverMessage: true, createdAt: true,
+            applicant: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+        },
+      },
+    }),
+    prisma.requestApplication.count(),
+    prisma.investorRequest.groupBy({ by: ["status"], _count: { id: true } }),
+    prisma.requestApplication.groupBy({ by: ["status"], _count: { id: true } }),
+  ]);
+
+  return {
+    offers,
+    applicationsTotal: applications,
+    offersByStatus: byOfferStatus.map(item => ({ status: item.status, count: item._count.id })),
+    applicationsByStatus: byApplicationStatus.map(item => ({ status: item.status, count: item._count.id })),
+  };
+}
+
+export async function updateMarketplaceApplication(applicationId, adminId, status) {
+  const allowedStatuses = ["pending", "accepted", "rejected"];
+  if (!allowedStatuses.includes(status)) {
+    throw new AppError("Statut de candidature invalide.", 400, "INVALID_STATUS");
+  }
+
+  const application = await prisma.requestApplication.findUnique({
+    where: { id: applicationId },
+    select: { id: true, status: true, requestId: true, applicantId: true },
+  });
+  if (!application) throw new AppError("Candidature introuvable.", 404, "NOT_FOUND");
+
+  const updated = await prisma.requestApplication.update({
+    where: { id: applicationId },
+    data: { status },
+    select: { id: true, status: true, requestId: true, applicantId: true },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "MARKETPLACE_APPLICATION_STATUS_UPDATED",
+      entityType: "request_application",
+      entityId: applicationId,
+      oldValues: { status: application.status },
+      newValues: { status, requestId: application.requestId },
+    },
+  });
+
+  await createNotification({
+    userId: updated.applicantId,
+    type: "investment",
+    title: status === "accepted" ? "✅ Candidature acceptée" : status === "rejected" ? "Candidature refusée" : "Candidature en attente",
+    body: `Le statut de votre candidature marketplace a été mis à jour : ${status}.`,
+    actionUrl: "/investor-requests",
+  });
+
+  return updated;
+}
+
+export async function deleteMarketplaceOffer(offerId, adminId, reason) {
+  const offer = await prisma.investorRequest.findUnique({
+    where: { id: offerId },
+    select: { id: true, title: true, status: true, authorId: true },
+  });
+  if (!offer) throw new AppError("Offre introuvable.", 404, "NOT_FOUND");
+
+  await prisma.$transaction(async tx => {
+    await tx.investorRequest.update({ where: { id: offerId }, data: { status: "deleted" } });
+    await tx.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: "MARKETPLACE_OFFER_DELETED",
+        entityType: "investor_request",
+        entityId: offerId,
+        oldValues: { status: offer.status, title: offer.title },
+        newValues: { status: "deleted", reason: reason || null },
+      },
+    });
+  });
+
+  await createNotification({
+    userId: offer.authorId,
+    type: "system",
+    title: "⚠️ Votre offre marketplace a été supprimée",
+    body: `L'offre « ${offer.title} » a été supprimée par l'administration.${reason ? ` Motif : ${reason}` : ""}`,
+    actionUrl: "/investor-requests",
+  });
+
+  return { deleted: true, offerId };
+}

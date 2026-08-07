@@ -35,6 +35,11 @@ router.put("/projects/:id/approve", validate(approveProjectSchema), ctrl.approve
 router.put("/projects/:id/reject",  validate(rejectProjectSchema), ctrl.rejectProject);
 router.delete("/projects/:id",       ctrl.deleteProject);
 
+// Marketplace
+router.get("/marketplace",                         ctrl.getMarketplaceOverview);
+router.put("/marketplace/applications/:id/status", ctrl.updateMarketplaceApplication);
+router.delete("/marketplace/offers/:id",           ctrl.deleteMarketplaceOffer);
+
 // Audit
 router.get("/audit-logs",           validateQuery(auditLogsQuerySchema), ctrl.getAuditLogs);
 

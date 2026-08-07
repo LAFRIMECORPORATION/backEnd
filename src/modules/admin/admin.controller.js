@@ -84,3 +84,31 @@ export async function deleteProject(req, res, next) {
     return success(res, result, "Projet retiré de la plateforme.");
   } catch (err) { next(err); }
 }
+
+export async function getMarketplaceOverview(req, res, next) {
+  try {
+    return success(res, await svc.getMarketplaceOverview());
+  } catch (err) { next(err); }
+}
+
+export async function updateMarketplaceApplication(req, res, next) {
+  try {
+    const result = await svc.updateMarketplaceApplication(
+      req.params.id,
+      req.user.id,
+      req.body.status,
+    );
+    return success(res, result, "Candidature mise à jour.");
+  } catch (err) { next(err); }
+}
+
+export async function deleteMarketplaceOffer(req, res, next) {
+  try {
+    const result = await svc.deleteMarketplaceOffer(
+      req.params.id,
+      req.user.id,
+      req.body?.reason,
+    );
+    return success(res, result, "Offre supprimée par l'administration.");
+  } catch (err) { next(err); }
+}
