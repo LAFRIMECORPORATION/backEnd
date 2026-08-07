@@ -33,6 +33,7 @@ model User {
   conversations1       Conversation[]       @relation("ConvUser1")
   conversations2       Conversation[]       @relation("ConvUser2")
   feedEvents           FeedEvent[]
+  forumPostLikes       ForumPostLike[]
   forumPosts           ForumPost[]
   investments          Investment[]
   investorRequests     InvestorRequest[]
@@ -459,8 +460,10 @@ model ForumPost {
   title        String?
   content      String
   likesCount   Int           @default(0) @map("likes_count")
+  tags         String[]      @default([])
   isPinned     Boolean       @default(false) @map("is_pinned")
   isDeleted    Boolean       @default(false) @map("is_deleted")
+  deletedAt    DateTime?     @map("deleted_at")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   isEdited     Boolean       @default(false) @map("is_edited")
@@ -468,10 +471,23 @@ model ForumPost {
   viewsCount   Int           @default(0) @map("views_count")
   author       User          @relation(fields: [authorId], references: [id])
   category     ForumCategory @relation(fields: [categoryId], references: [id])
+  likes        ForumPostLike[]
   parent       ForumPost?    @relation("PostReplies", fields: [parentId], references: [id])
   replies      ForumPost[]   @relation("PostReplies")
 
   @@map("forum_posts")
+}
+
+model ForumPostLike {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  postId    String    @map("post_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("forum_post_likes")
 }
 
 model ForumCategory {
