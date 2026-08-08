@@ -84,15 +84,14 @@ export async function updateUser(userId, data, requesterId) {
   const { firstName, lastName, bio, profile } = data;
 
   // Mise à jour en transaction
-  const updated = await prisma.$transaction(async (tx) => {
-    const updatedUser = await tx.user.update({
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
       where: { id: userId },
       data:  {
         ...(firstName && { firstName }),
         ...(lastName  && { lastName  }),
         ...(bio       !== undefined && { bio }),
       },
-      select: { id: true, firstName: true, lastName: true, bio: true, avatarUrl: true },
     });
 
     if (profile) {
@@ -102,11 +101,9 @@ export async function updateUser(userId, data, requesterId) {
         update: profile,
       });
     }
-
-    return updatedUser;
   });
 
-  return updated;
+  return getUserById(userId);
 }
 
 // ── POST /users/:id/avatar ────────────────────────────────
