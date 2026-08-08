@@ -92,6 +92,7 @@ model UserProfile {
   linkedinUrl       String?  @map("linkedin_url")
   githubUrl         String?  @map("github_url")
   portfolioUrl      String?  @map("portfolio_url")
+  coverImageUrl     String?  @map("cover_image_url")
   cvUrl             String?  @map("cv_url")
   availability      String?
   minTicket         Decimal? @map("min_ticket") @db.Decimal(15, 2)

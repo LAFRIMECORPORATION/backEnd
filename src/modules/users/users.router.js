@@ -79,4 +79,17 @@ router.post("/:id/avatar",
   }
 );
 
+router.post("/:id/cover",
+  authenticate,
+  requireOwnerOrAdmin("id"),
+  upload.single("cover"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) throw new AppError("Aucun fichier fourni.", 400, "NO_FILE");
+      const profile = await usersService.updateCover(req.params.id, req.file.buffer);
+      return success(res, { profile }, "Photo de couverture mise à jour.");
+    } catch (e) { next(e); }
+  },
+);
+
 export default router;

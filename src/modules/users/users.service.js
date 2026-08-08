@@ -29,6 +29,7 @@ const PUBLIC_SELECT = {
       linkedinUrl:      true,
       githubUrl:        true,
       portfolioUrl:     true,
+      coverImageUrl:    true,
       availability:     true,
       investmentRegions:true,
     },
@@ -176,4 +177,33 @@ export async function listUsers({ page = 1, limit = 20, role, search }) {
   ]);
 
   return { users, total };
+}
+
+export async function updateCover(userId, fileBuffer) {
+  return new Promise((resolve, reject) => {
+    const stream = require("cloudinary").v2.uploader.upload_stream(
+      {
+        folder: "launchpad/covers",
+        public_id: `cover_${userId}`,
+        overwrite: true,
+        transformation: [
+          { width: 1600, height: 500, crop: "fill", gravity: "auto" },
+          { quality: "auto", fetch_format: "auto" },
+        ],
+      },
+      async (error, result) => {
+        if (error) return reject(error);
+        try {
+          const updated = await prisma.userProfile.upsert({
+            where: { userId },
+            create: { userId, coverImageUrl: result.secure_url },
+            update: { coverImageUrl: result.secure_url },
+            select: { userId: true, coverImageUrl: true },
+          });
+          resolve(updated);
+        } catch (dbError) { reject(dbError); }
+      },
+    );
+    stream.end(fileBuffer);
+  });
 }
