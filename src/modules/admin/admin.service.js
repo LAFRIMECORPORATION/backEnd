@@ -7,6 +7,7 @@ import prisma from "../../config/database.js";
 import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { randomUUID } from "node:crypto";
+import * as paymentsService from "../payments/payments.service.js";
 
 // ════════════════════════════════════════════════════════════
 // STATISTIQUES GLOBALES
@@ -617,4 +618,100 @@ export async function deleteMarketplaceOffer(offerId, adminId, reason) {
   });
 
   return { deleted: true, offerId };
+}
+
+export async function getInvestmentsControl({ status } = {}) {
+  return paymentsService.adminListInvestments({ status: status && status !== "all" ? status : undefined, page: 1, limit: 100 });
+}
+
+export async function refundInvestment(investmentId, adminId, reason) {
+  const result = await paymentsService.refundInvestment(investmentId, adminId, reason || "Remboursement décidé par l'administration.");
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "INVESTMENT_REFUNDED",
+      entityType: "investment",
+      entityId: investmentId,
+      newValues: { reason: reason || null },
+    },
+  });
+  return result;
+}
+
+export async function getAcademyControl() {
+  const [courses, enrollments, byLevel] = await Promise.all([
+    prisma.academyCourse.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, title: true, description: true, courseType: true,
+        level: true, isPremium: true, enrollCount: true, rating: true,
+        createdAt: true, publishedAt: true,
+        _count: { select: { enrollments: true } },
+      },
+    }),
+    prisma.academyEnrollment.count(),
+    prisma.academyCourse.groupBy({ by: ["level"], _count: { id: true } }),
+  ]);
+  return {
+    courses,
+    enrollments,
+    coursesByLevel: byLevel.map(item => ({ level: item.level, count: item._count.id })),
+  };
+}
+
+export async function deleteAcademyCourse(courseId, adminId) {
+  const course = await prisma.academyCourse.findUnique({ where: { id: courseId }, select: { id: true, title: true } });
+  if (!course) throw new AppError("Cours introuvable.", 404, "NOT_FOUND");
+  await prisma.$transaction(async tx => {
+    await tx.academyCourse.delete({ where: { id: courseId } });
+    await tx.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: "ACADEMY_COURSE_DELETED",
+        entityType: "academy_course",
+        entityId: courseId,
+        oldValues: { title: course.title },
+      },
+    });
+  });
+  return { deleted: true, courseId };
+}
+
+export async function getForumControl() {
+  const [posts, total, byCategory] = await Promise.all([
+    prisma.forumPost.findMany({
+      where: { parentId: null },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true, title: true, content: true, likesCount: true,
+        repliesCount: true, viewsCount: true, isPinned: true,
+        isDeleted: true, createdAt: true,
+        author: { select: { id: true, firstName: true, lastName: true, email: true } },
+        category: { select: { id: true, name: true } },
+        _count: { select: { replies: true, likes: true } },
+      },
+    }),
+    prisma.forumPost.count({ where: { parentId: null } }),
+    prisma.forumPost.groupBy({ by: ["categoryId"], where: { parentId: null }, _count: { id: true } }),
+  ]);
+  return { posts, total, postsByCategory: byCategory.map(item => ({ categoryId: item.categoryId, count: item._count.id })) };
+}
+
+export async function toggleForumPin(postId, adminId) {
+  const post = await prisma.forumPost.findUnique({ where: { id: postId }, select: { id: true, isPinned: true } });
+  if (!post) throw new AppError("Publication forum introuvable.", 404, "NOT_FOUND");
+  const updated = await prisma.forumPost.update({ where: { id: postId }, data: { isPinned: !post.isPinned }, select: { id: true, isPinned: true } });
+  await prisma.auditLog.create({ data: { actorId: adminId, action: updated.isPinned ? "FORUM_POST_PINNED" : "FORUM_POST_UNPINNED", entityType: "forum_post", entityId: postId, newValues: updated } });
+  return updated;
+}
+
+export async function deleteForumPost(postId, adminId) {
+  const post = await prisma.forumPost.findUnique({ where: { id: postId }, select: { id: true, title: true } });
+  if (!post) throw new AppError("Publication forum introuvable.", 404, "NOT_FOUND");
+  await prisma.$transaction(async tx => {
+    await tx.forumPost.update({ where: { id: postId }, data: { isDeleted: true, deletedAt: new Date() } });
+    await tx.auditLog.create({ data: { actorId: adminId, action: "FORUM_POST_DELETED", entityType: "forum_post", entityId: postId, oldValues: { title: post.title } } });
+  });
+  return { deleted: true, postId };
 }

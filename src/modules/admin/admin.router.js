@@ -40,6 +40,15 @@ router.get("/marketplace",                         ctrl.getMarketplaceOverview);
 router.put("/marketplace/applications/:id/status", ctrl.updateMarketplaceApplication);
 router.delete("/marketplace/offers/:id",           ctrl.deleteMarketplaceOffer);
 
+// Investissements, Academy et Forum
+router.get("/investments-control",                  ctrl.getInvestmentsControl);
+router.post("/investments/:id/refund",              ctrl.refundInvestment);
+router.get("/academy-control",                      ctrl.getAcademyControl);
+router.delete("/academy/courses/:id",               ctrl.deleteAcademyCourse);
+router.get("/forum-control",                        ctrl.getForumControl);
+router.put("/forum/posts/:id/pin",                  ctrl.toggleForumPin);
+router.delete("/forum/posts/:id",                   ctrl.deleteForumPost);
+
 // Audit
 router.get("/audit-logs",           validateQuery(auditLogsQuerySchema), ctrl.getAuditLogs);
 

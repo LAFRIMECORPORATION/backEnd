@@ -112,3 +112,39 @@ export async function deleteMarketplaceOffer(req, res, next) {
     return success(res, result, "Offre supprimée par l'administration.");
   } catch (err) { next(err); }
 }
+
+export async function getInvestmentsControl(req, res, next) {
+  try { return success(res, await svc.getInvestmentsControl(req.query)); }
+  catch (err) { next(err); }
+}
+
+export async function refundInvestment(req, res, next) {
+  try {
+    return success(res, await svc.refundInvestment(req.params.id, req.user.id, req.body?.reason), "Investissement remboursé.");
+  } catch (err) { next(err); }
+}
+
+export async function getAcademyControl(req, res, next) {
+  try { return success(res, await svc.getAcademyControl()); }
+  catch (err) { next(err); }
+}
+
+export async function deleteAcademyCourse(req, res, next) {
+  try { return success(res, await svc.deleteAcademyCourse(req.params.id, req.user.id), "Cours supprimé."); }
+  catch (err) { next(err); }
+}
+
+export async function getForumControl(req, res, next) {
+  try { return success(res, await svc.getForumControl()); }
+  catch (err) { next(err); }
+}
+
+export async function toggleForumPin(req, res, next) {
+  try { return success(res, await svc.toggleForumPin(req.params.id, req.user.id)); }
+  catch (err) { next(err); }
+}
+
+export async function deleteForumPost(req, res, next) {
+  try { return success(res, await svc.deleteForumPost(req.params.id, req.user.id), "Publication forum supprimée."); }
+  catch (err) { next(err); }
+}
