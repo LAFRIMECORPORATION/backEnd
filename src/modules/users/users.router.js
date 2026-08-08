@@ -74,7 +74,8 @@ router.post("/:id/avatar",
         throw new AppError("Aucun fichier fourni.", 400, "NO_FILE");
       }
       const user = await usersService.updateAvatar(req.params.id, req.file.buffer);
-      return success(res, { user }, "Avatar mis à jour.");
+      const fullUser = await usersService.getUserById(req.params.id);
+      return success(res, { user: fullUser }, "Avatar mis à jour.");
     } catch (e) { next(e); }
   }
 );
@@ -87,7 +88,8 @@ router.post("/:id/cover",
     try {
       if (!req.file) throw new AppError("Aucun fichier fourni.", 400, "NO_FILE");
       const profile = await usersService.updateCover(req.params.id, req.file.buffer);
-      return success(res, { profile }, "Photo de couverture mise à jour.");
+      const user = await usersService.getUserById(req.params.id);
+      return success(res, { user, profile }, "Photo de couverture mise à jour.");
     } catch (e) { next(e); }
   },
 );

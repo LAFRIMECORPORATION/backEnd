@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import prisma from "../../config/database.js";
 import { uploadAvatar } from "../../config/cloudinary.js";
 import { AppError } from "../../middleware/errorHandler.js";
+import { v2 as cloudinary } from "cloudinary";
 
 // ── Sélecteur profil public ───────────────────────────────
 const PUBLIC_SELECT = {
@@ -111,7 +112,7 @@ export async function updateUser(userId, data, requesterId) {
 // ── POST /users/:id/avatar ────────────────────────────────
 export async function updateAvatar(userId, fileBuffer) {
   return new Promise((resolve, reject) => {
-    const stream = require("cloudinary").v2.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
       {
         folder:    "launchpad/avatars",
         public_id: `avatar_${userId}`,
@@ -181,7 +182,7 @@ export async function listUsers({ page = 1, limit = 20, role, search }) {
 
 export async function updateCover(userId, fileBuffer) {
   return new Promise((resolve, reject) => {
-    const stream = require("cloudinary").v2.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
       {
         folder: "launchpad/covers",
         public_id: `cover_${userId}`,
