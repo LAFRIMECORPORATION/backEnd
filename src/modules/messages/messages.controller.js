@@ -82,3 +82,18 @@ export async function getUnreadCount(req, res, next) {
     next(e);
   }
 }
+
+export async function sendGlobalMessage(req, res, next) {
+  try {
+    // Vérifier que l'utilisateur est admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Accès réservé aux administrateurs." });
+    }
+    
+    const io = req.app.get("io") || null;
+    const result = await svc.sendGlobalMessage(req.user.id, req.body, io);
+    return created(res, result, "Message global envoyé avec succès.");
+  } catch (e) {
+    next(e);
+  }
+}

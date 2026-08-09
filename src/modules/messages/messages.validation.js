@@ -11,6 +11,12 @@ export const createDirectConvSchema = z.object({
   targetUserId: z.string({required_error:"targetUserId requis."}).uuid("Format UUID invalide."),
 });
 
+export const sendGlobalMessageSchema = z.object({
+  content: z.string({ required_error: "Le contenu est requis." }).min(1, "Le contenu est requis.").max(5000, "Message trop long."),
+  messageType: z.enum(["text", "file", "project_share"]).default("text"),
+  fileUrl: z.string().url().optional().nullable(),
+});
+
 export function validate(schema) {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);

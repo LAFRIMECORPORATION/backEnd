@@ -335,3 +335,112 @@ export async function getTotalUnread(userId) {
     0,
   );
 }
+
+// ════════════════════════════════════════════════════════════
+// ENVOYER MESSAGE GLOBAL À TOUS LES UTILISATEURS (Admin)
+// POST /api/messages/global
+// ════════════════════════════════════════════════════════════
+export async function sendGlobalMessage(adminId, { content, messageType = "text", fileUrl = null }, io = null) {
+  // Vérifier que l'expéditeur est admin
+  const admin = await prisma.user.findUnique({
+    where: { id: adminId },
+    select: { id: true, role: true, firstName: true, lastName: true },
+  });
+  
+  if (!admin || admin.role !== "admin") {
+    throw new AppError("Accès réservé aux administrateurs.", 403, "FORBIDDEN");
+  }
+
+  if (!content && messageType === "text") {
+    throw new AppError("Le contenu est requis.", 400, "VALIDATION_ERROR");
+  }
+
+  // Récupérer tous les utilisateurs actifs (sauf l'admin)
+  const users = await prisma.user.findMany({
+    where: { 
+      isActive: true,
+      id: { not: adminId },
+      role: { not: "admin" }
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+
+  const results = [];
+  const senderName = `${admin.firstName} ${admin.lastName}`;
+
+  // Créer ou récupérer conversation et envoyer message pour chaque utilisateur
+  for (const user of users) {
+    try {
+      // Créer ou récupérer conversation admin-utilisateur
+      const existingConv = await prisma.conversation.findFirst({
+        where: {
+          OR: [
+            { user1Id: adminId, user2Id: user.id },
+            { user1Id: user.id, user2Id: adminId },
+          ],
+        },
+        select: { id: true },
+      });
+
+      const conversationId = existingConv?.id || (await prisma.conversation.create({
+        data: { user1Id: adminId, user2Id: user.id }
+      })).id;
+
+      // Créer le message
+      const message = await prisma.message.create({
+        data: {
+          conversationId,
+          senderId: adminId,
+          content: content || "",
+          messageType,
+          fileUrl: fileUrl || null,
+        },
+        select: MESSAGE_SELECT,
+      });
+
+      // Mettre à jour la conversation
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          lastMessageAt: new Date(),
+          unreadUser2: { increment: 1 },
+        },
+      });
+
+      // Créer notification pour l'utilisateur
+      await createNotification({
+        userId: user.id,
+        type: "message",
+        title: `📢 Message de Launchpad Admin`,
+        body: messageType === "text"
+          ? (content || "").substring(0, 80) + (content?.length > 80 ? "…" : "")
+          : "📎 Fichier partagé par l'admin",
+        actionUrl: `/messages?conversation=${conversationId}`,
+      }).catch(console.error);
+
+      // Émettre via Socket.io si disponible
+      if (io) {
+        io.to(`user_${user.id}`).emit("new_message", {
+          message,
+          conversationId,
+        });
+        io.to(`user_${user.id}`).emit("unread_update", {
+          conversationId,
+          increment: 1,
+        });
+      }
+
+      results.push({ userId: user.id, conversationId, success: true });
+    } catch (error) {
+      console.error(`Erreur lors de l'envoi à l'utilisateur ${user.id}:`, error);
+      results.push({ userId: user.id, success: false, error: error.message });
+    }
+  }
+
+  return {
+    totalRecipients: users.length,
+    successful: results.filter(r => r.success).length,
+    failed: results.filter(r => !r.success).length,
+    results,
+  };
+}

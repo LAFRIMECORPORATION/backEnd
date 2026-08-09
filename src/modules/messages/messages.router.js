@@ -5,7 +5,8 @@
 import { Router }       from "express";
 import { authenticate } from "../../middleware/authenticate.js";
 import { apiLimiter }   from "../../middleware/rateLimiter.js";
-import { validate, sendMessageSchema, createDirectConvSchema } from "./messages.validation.js";
+import { validate, sendMessageSchema, createDirectConvSchema, sendGlobalMessageSchema } from "./messages.validation.js";
+import { requireRole } from "../../middleware/authorize.js";
 import * as ctrl from "./messages.controller.js";
 
 const router = Router();
