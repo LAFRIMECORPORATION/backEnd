@@ -55,3 +55,10 @@ export async function mine(req, res, next) {
     return success(res, result);
   } catch (err) { next(err); }
 }
+
+export async function updateApplicationStatus(req, res, next) {
+  try {
+    const result = await svc.updateApplicationStatus(req.params.id, req.params.appId, req.user.id, req.body.status);
+    return success(res, result, "Statut de la candidature mis à jour.");
+  } catch (err) { next(err); }
+}

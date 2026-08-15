@@ -487,9 +487,21 @@ export async function deleteProject(projectId, requesterId, userRole) {
     );
   }
 
-  await prisma.project.delete({ where: { id: projectId } });
+  // Transaction de nettoyage total et définitif
+  await prisma.$transaction([
+    prisma.feedEvent.deleteMany({ where: { projectId } }),
+    prisma.appointment.updateMany({ where: { projectId }, data: { projectId: null } }),
+    prisma.collaboration.deleteMany({ where: { OR: [{ projectFromId: projectId }, { projectToId: projectId }] } }),
+    prisma.projectLike.deleteMany({ where: { projectId } }),
+    prisma.projectSave.deleteMany({ where: { projectId } }),
+    prisma.comment.deleteMany({ where: { projectId } }),
+    prisma.project.delete({ where: { id: projectId } }),
+  ]);
 
-  return { message: "Projet supprimé." };
+  // Vider le cache de liste de projets
+  projectsListCache.clear();
+
+  return { message: "Projet supprimé définitivement." };
 }
 
 // ════════════════════════════════════════════════════════════

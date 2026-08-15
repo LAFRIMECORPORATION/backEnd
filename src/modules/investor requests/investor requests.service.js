@@ -7,7 +7,7 @@ import prisma from "../../config/database.js";
 import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
 
-export const REQUEST_TYPES = ["equity", "loan", "grant", "mentoring"];
+export const REQUEST_TYPES = ["equity", "loan", "grant", "mentoring", "job"];
 
 // ════════════════════════════════════════════════════════════
 // PUBLIER UNE OFFRE (investisseur)
@@ -255,6 +255,50 @@ export async function deleteRequest(requestId, investorId) {
   });
 
   return { deleted: true };
+}
+
+// ════════════════════════════════════════════════════════════
+// CHANGER LE STATUT D'UNE CANDIDATURE (investisseur)
+// PUT /api/investor-requests/:id/applications/:appId/status
+// ════════════════════════════════════════════════════════════
+export async function updateApplicationStatus(requestId, appId, investorId, status) {
+  const request = await prisma.investorRequest.findFirst({
+    where: { id: requestId, authorId: investorId },
+    select: { id: true, title: true },
+  });
+  if (!request) throw new AppError("Offre introuvable ou non autorisée.", 404, "NOT_FOUND");
+
+  const app = await prisma.requestApplication.findUnique({
+    where: { id: appId },
+    select: { id: true, applicantId: true, status: true },
+  });
+  if (!app) throw new AppError("Candidature introuvable.", 404, "NOT_FOUND");
+
+  const updated = await prisma.requestApplication.update({
+    where: { id: appId },
+    data: { status },
+    select: {
+      id: true, status: true, coverMessage: true, createdAt: true,
+      applicant: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+    },
+  });
+
+  // Notification à l'étudiant candidat
+  const statusLabels = {
+    shortlisted: "pré-sélectionnée ⭐",
+    accepted: "acceptée ✅",
+    rejected: "non retenue ❌",
+    pending: "remise en attente ⏳",
+  };
+  await createNotification({
+    userId: app.applicantId,
+    type: "investment",
+    title: "📋 Statut de candidature mis à jour",
+    body: `Votre candidature à l'offre "${request.title}" a été marque comme ${statusLabels[status] || status}.`,
+    actionUrl: `/investor-requests/${requestId}`,
+  }).catch(console.error);
+
+  return _mapApplication(updated);
 }
 
 // ════════════════════════════════════════════════════════════

@@ -14,6 +14,7 @@ router.get("/:id",       ctrl.getOne);
 router.post("/",              authenticate, requireKyc, ctrl.create);
 router.post("/:id/apply",     authenticate, requireKyc, ctrl.apply);
 router.put("/:id",            authenticate, ctrl.update);
+router.put("/:id/applications/:appId/status", authenticate, ctrl.updateApplicationStatus);
 router.delete("/:id",         authenticate, ctrl.remove);
 
 export default router;
