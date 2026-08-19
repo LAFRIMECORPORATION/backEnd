@@ -17,7 +17,7 @@ const MESSAGE_SELECT = {
   createdAt: true,
   senderId: true,
   sender: {
-    select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+    select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
   },
 };
 

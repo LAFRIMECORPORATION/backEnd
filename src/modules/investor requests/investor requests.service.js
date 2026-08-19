@@ -111,6 +111,7 @@ export async function getRequest(requestId) {
       applications: {
         select: {
           id:           true,
+          applicantId:  true,
           status:       true,
           coverMessage: true,
           createdAt:    true,
@@ -370,12 +371,14 @@ function _mapRequest(req) {
 
 function _mapApplication(app) {
   if (!app) return null;
+  const applicantId = app.applicantId || app.applicant?.id;
   return {
     id:           app.id,
+    applicantId,
     status:       app.status,
     message:      app.coverMessage,
     createdAt:    app.createdAt,
-    applicant:    app.applicant,
-    project:      null, // Projet simulé car non existant dans le nouveau schéma
+    applicant:    app.applicant ? { ...app.applicant, id: app.applicant.id || applicantId } : null,
+    project:      null,
   };
 }
