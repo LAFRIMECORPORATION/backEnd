@@ -194,7 +194,7 @@ export async function applyToRequest(requestId, applicantId, { message, projectI
     type:      "investment",
     title:     existing ? "📩 Candidature renvoyée" : "📩 Nouvelle candidature reçue",
     body:      `${application.applicant.firstName} a postulé à votre offre "${request.title}"`,
-    actionUrl: `/investor-requests/${requestId}`,
+    actionUrl: `/marketplace/${requestId}`,
   });
 
   return _mapApplication(application);
@@ -296,7 +296,7 @@ export async function updateApplicationStatus(requestId, appId, investorId, stat
     type: "investment",
     title: "📋 Statut de candidature mis à jour",
     body: `Votre candidature à l'offre "${request.title}" a été marque comme ${statusLabels[status] || status}.`,
-    actionUrl: `/investor-requests/${requestId}`,
+    actionUrl: `/marketplace/${requestId}`,
   }).catch(console.error);
 
   return _mapApplication(updated);

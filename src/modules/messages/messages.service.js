@@ -17,7 +17,7 @@ const MESSAGE_SELECT = {
   createdAt: true,
   senderId: true,
   sender: {
-    select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
+    select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true, kycValidated: true },
   },
 };
 
@@ -38,6 +38,7 @@ async function checkConvAccess(convId, userId) {
           lastName: true,
           avatarUrl: true,
           role: true,
+          kycValidated: true,
         },
       },
       user2: {
@@ -47,6 +48,7 @@ async function checkConvAccess(convId, userId) {
           lastName: true,
           avatarUrl: true,
           role: true,
+          kycValidated: true,
         },
       },
     },
@@ -118,6 +120,7 @@ export async function listConversations(userId) {
           lastName: true,
           avatarUrl: true,
           role: true,
+          kycValidated: true,
         },
       },
       user2: {
@@ -127,6 +130,7 @@ export async function listConversations(userId) {
           lastName: true,
           avatarUrl: true,
           role: true,
+          kycValidated: true,
         },
       },
       messages: {
@@ -224,14 +228,17 @@ export async function sendMessage(
   // 3. Notification in-app
   const sender = await prisma.user.findUnique({
     where: { id: senderId },
-    select: { firstName: true, lastName: true },
+    select: { firstName: true, lastName: true, role: true },
   });
   const recipientId = isUser1 ? conv.user2Id : conv.user1Id;
+  
+  // Utiliser adminlaunchpad pour les admins dans les notifications
+  const senderName = sender.role === "admin" ? "adminlaunchpad" : `${sender.firstName} ${sender.lastName}`;
 
   createNotification({
     userId: recipientId,
     type: "message",
-    title: `💬 Message de ${sender.firstName} ${sender.lastName}`,
+    title: `💬 Message de ${senderName}`,
     body:
       messageType === "text"
         ? (content || "").substring(0, 80) +
