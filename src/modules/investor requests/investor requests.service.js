@@ -275,6 +275,24 @@ export async function updateApplicationStatus(requestId, appId, investorId, stat
   });
   if (!app) throw new AppError("Candidature introuvable.", 404, "NOT_FOUND");
 
+  // Si rejeté, supprimer la candidature
+  if (status === "rejected") {
+    await prisma.requestApplication.delete({
+      where: { id: appId },
+    });
+    
+    // Notification à l'étudiant candidat
+    await createNotification({
+      userId: app.applicantId,
+      type: "investment",
+      title: "📋 Candidature non retenue",
+      body: `Votre candidature à l'offre "${request.title}" n'a pas été retenue.`,
+      actionUrl: `/marketplace/${requestId}`,
+    }).catch(console.error);
+    
+    return { deleted: true, id: appId };
+  }
+
   const updated = await prisma.requestApplication.update({
     where: { id: appId },
     data: { status },
@@ -288,7 +306,6 @@ export async function updateApplicationStatus(requestId, appId, investorId, stat
   const statusLabels = {
     shortlisted: "pré-sélectionnée ⭐",
     accepted: "acceptée ✅",
-    rejected: "non retenue ❌",
     pending: "remise en attente ⏳",
   };
   await createNotification({

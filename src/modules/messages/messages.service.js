@@ -64,6 +64,8 @@ async function checkConvAccess(convId, userId) {
 // POST /api/conversations/direct
 // ════════════════════════════════════════════════════════════
 export async function getOrCreateDirectConversation(user1Id, user2Id) {
+  console.log(`🔍 Création conversation: user1Id=${user1Id}, user2Id=${user2Id}`);
+  
   if (user1Id === user2Id)
     throw new AppError(
       "Impossible de créer une conversation avec soi-même.",
@@ -73,8 +75,10 @@ export async function getOrCreateDirectConversation(user1Id, user2Id) {
 
   const otherUser = await prisma.user.findUnique({
     where: { id: user2Id, isActive: true },
-    select: { id: true, firstName: true, lastName: true },
+    select: { id: true, firstName: true, lastName: true, role: true },
   });
+  console.log(`🔍 Autre utilisateur trouvé:`, otherUser);
+  
   if (!otherUser)
     throw new AppError("Utilisateur introuvable.", 404, "NOT_FOUND");
 
@@ -87,11 +91,13 @@ export async function getOrCreateDirectConversation(user1Id, user2Id) {
     },
     select: { id: true },
   });
+  console.log(`🔍 Conversation existante:`, existing);
 
   const convId =
     existing?.id ||
     (await prisma.conversation.create({ data: { user1Id, user2Id } })).id;
-
+  
+  console.log(`🔍 Conversation ID: ${convId}`);
   return checkConvAccess(convId, user1Id);
 }
 

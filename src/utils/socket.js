@@ -61,6 +61,18 @@ export function setupSocketIO(io) {
     // Broadcaster le statut en ligne à tous
     socket.broadcast.emit("user_online", { userId });
 
+    // Envoyer la liste actuelle des utilisateurs en ligne au client connecté
+    socket.emit("online_users_list", { userIds: getOnlineUsers() });
+
+    // Répondre aux vérifications de présence ciblées
+    socket.on("presence_check", ({ userId: targetId }) => {
+      if (!targetId) return;
+      socket.emit("presence_response", {
+        userId: targetId,
+        isOnline: isUserOnline(targetId),
+      });
+    });
+
     // ── Rejoindre une conversation ─────────────────────────
     socket.on("join_conversation", ({ conversationId }) => {
       if (!conversationId) return;
