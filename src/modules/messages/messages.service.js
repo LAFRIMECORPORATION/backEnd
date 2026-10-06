@@ -6,6 +6,7 @@
 import prisma from "../../config/database.js";
 import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
+import { isUserOnline } from "../../utils/socket.js";
 
 const MESSAGE_SELECT = {
   id: true,
@@ -17,7 +18,7 @@ const MESSAGE_SELECT = {
   createdAt: true,
   senderId: true,
   sender: {
-    select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true, kycValidated: true },
+    select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true, kycValidated: true, lastSeenAt: true },
   },
 };
 
@@ -39,6 +40,7 @@ async function checkConvAccess(convId, userId) {
           avatarUrl: true,
           role: true,
           kycValidated: true,
+          lastSeenAt: true,
         },
       },
       user2: {
@@ -49,6 +51,7 @@ async function checkConvAccess(convId, userId) {
           avatarUrl: true,
           role: true,
           kycValidated: true,
+          lastSeenAt: true,
         },
       },
     },
@@ -127,6 +130,7 @@ export async function listConversations(userId) {
           avatarUrl: true,
           role: true,
           kycValidated: true,
+          lastSeenAt: true,
         },
       },
       user2: {
@@ -137,6 +141,7 @@ export async function listConversations(userId) {
           avatarUrl: true,
           role: true,
           kycValidated: true,
+          lastSeenAt: true,
         },
       },
       messages: {
@@ -155,11 +160,18 @@ export async function listConversations(userId) {
 
   return conversations.map((conv) => {
     const isUser1 = conv.user1Id === userId;
+    const other = isUser1 ? conv.user2 : conv.user1;
     return {
       id: conv.id,
       lastMessageAt: conv.lastMessageAt,
       unread: isUser1 ? conv.unreadUser1 : conv.unreadUser2,
-      other: isUser1 ? conv.user2 : conv.user1,
+      other: other
+        ? {
+            ...other,
+            isOnline: isUserOnline(other.id),
+            lastSeenAt: other.lastSeenAt,
+          }
+        : null,
       lastMessage: conv.messages[0]
         ? {
             content: conv.messages[0].content,

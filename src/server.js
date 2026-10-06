@@ -13,7 +13,7 @@ import { env } from "./config/env.js";
 import { connectDatabase, pingDatabase } from "./config/database.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { globalLimiter } from "./middleware/rateLimiter.js";
-import { initSocket } from "./socket.js";
+import { setupSocketIO } from "./utils/socket.js";
 import { startCronJobs } from "./cron.js";
 
 // ── Routers ──────────────────────────────────────────────────
@@ -264,7 +264,7 @@ app.use(errorHandler);
 // ════════════════════════════════════════════════════════════
 // SOCKET.IO
 // ════════════════════════════════════════════════════════════
-initSocket(io);
+setupSocketIO(io);
 
 // ════════════════════════════════════════════════════════════
 // DÉMARRAGE

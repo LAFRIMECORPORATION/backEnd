@@ -18,7 +18,8 @@
 // ============================================================
 
 import jwt from "jsonwebtoken";
-import { env } from "./config/env.js";
+import { env } from "../config/env.js";
+import prisma from "../config/database.js";
 
 // Map des utilisateurs connectés : userId → Set<socketId>
 const onlineUsers = new Map();
@@ -36,6 +37,9 @@ export function setupSocketIO(io) {
       }
 
       const decoded = jwt.verify(token, env.JWT_SECRET);
+      if (typeof decoded.userId !== "string" || !decoded.userId) {
+        return next(new Error("Token invalide."));
+      }
       socket.userId = decoded.userId;
       socket.userRole = decoded.role;
       next();
@@ -58,6 +62,12 @@ export function setupSocketIO(io) {
     }
     onlineUsers.get(userId).add(socket.id);
 
+    // Mettre à jour lastSeenAt dans la base de données
+    prisma.user.update({
+      where: { id: userId },
+      data: { lastSeenAt: new Date() },
+    }).catch(console.error);
+
     // Broadcaster le statut en ligne à tous
     socket.broadcast.emit("user_online", { userId });
 
@@ -65,38 +75,86 @@ export function setupSocketIO(io) {
     socket.emit("online_users_list", { userIds: getOnlineUsers() });
 
     // Répondre aux vérifications de présence ciblées
-    socket.on("presence_check", ({ userId: targetId }) => {
+    socket.on("presence_check", async (payload = {}) => {
+      const targetId = payload?.userId;
       if (!targetId) return;
+      const online = isUserOnline(targetId);
+      let lastSeen = null;
+      if (!online) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: targetId },
+            select: { lastSeenAt: true },
+          });
+          lastSeen = user?.lastSeenAt ? user.lastSeenAt.toISOString() : null;
+        } catch (error) {
+          console.error("Erreur lors de la vérification de présence Socket.io :", error);
+          socket.emit("socket_error", {
+            event: "presence_check",
+            message: "Impossible de vérifier la présence de cet utilisateur.",
+          });
+          return;
+        }
+      }
       socket.emit("presence_response", {
         userId: targetId,
-        isOnline: isUserOnline(targetId),
+        isOnline: online,
+        lastSeenAt: lastSeen,
       });
     });
 
     // ── Rejoindre une conversation ─────────────────────────
-    socket.on("join_conversation", ({ conversationId }) => {
-      if (!conversationId) return;
-      socket.join(`conv_${conversationId}`);
-      console.log(`   📬 user ${userId.substring(0,8)} rejoint conv_${conversationId.substring(0,8)}`);
+    socket.on("join_conversation", async (payload = {}) => {
+      const conversationId = payload?.conversationId;
+      if (typeof conversationId !== "string" || !conversationId) return;
+
+      try {
+        const conversation = await prisma.conversation.findFirst({
+          where: {
+            id: conversationId,
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
+          select: { id: true },
+        });
+
+        if (!conversation) {
+          socket.emit("socket_error", {
+            event: "join_conversation",
+            message: "Accès refusé à cette conversation.",
+          });
+          return;
+        }
+
+        socket.join(`conv_${conversationId}`);
+      } catch (error) {
+        console.error("Erreur lors de la vérification de la conversation Socket.io :", error);
+        socket.emit("socket_error", {
+          event: "join_conversation",
+          message: "Impossible de rejoindre cette conversation.",
+        });
+      }
     });
 
     // ── Quitter une conversation ───────────────────────────
-    socket.on("leave_conversation", ({ conversationId }) => {
+    socket.on("leave_conversation", (payload = {}) => {
+      const conversationId = payload?.conversationId;
       if (!conversationId) return;
       socket.leave(`conv_${conversationId}`);
     });
 
     // ── Indicateur de frappe ───────────────────────────────
-    socket.on("typing", ({ conversationId }) => {
-      if (!conversationId) return;
+    socket.on("typing", (payload = {}) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId || !socket.rooms.has(`conv_${conversationId}`)) return;
       socket.to(`conv_${conversationId}`).emit("user_typing", {
         userId,
         conversationId,
       });
     });
 
-    socket.on("stop_typing", ({ conversationId }) => {
-      if (!conversationId) return;
+    socket.on("stop_typing", (payload = {}) => {
+      const conversationId = payload?.conversationId;
+      if (!conversationId || !socket.rooms.has(`conv_${conversationId}`)) return;
       socket.to(`conv_${conversationId}`).emit("user_stop_typing", {
         userId,
         conversationId,
@@ -112,8 +170,18 @@ export function setupSocketIO(io) {
         userSockets.delete(socket.id);
         if (userSockets.size === 0) {
           onlineUsers.delete(userId);
-          // Broadcaster le statut hors ligne
-          socket.broadcast.emit("user_offline", { userId });
+          const now = new Date();
+
+          prisma.user.update({
+            where: { id: userId },
+            data: { lastSeenAt: now },
+          }).catch(console.error);
+
+          // Broadcaster le statut hors ligne avec la date
+          socket.broadcast.emit("user_offline", {
+            userId,
+            lastSeenAt: now.toISOString(),
+          });
         }
       }
     });

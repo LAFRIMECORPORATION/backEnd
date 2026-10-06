@@ -20,6 +20,7 @@ router.post("/conversations/:id/read",   ctrl.markRead);
 
 // Messages
 router.post("/messages",   apiLimiter, validate(sendMessageSchema), ctrl.sendMessage);
+router.post("/messages/global", apiLimiter, requireRole(["admin"]), validate(sendGlobalMessageSchema), ctrl.sendGlobalMessage);
 router.delete("/messages/:id", ctrl.deleteMessage);
 router.get("/messages/unread-count", ctrl.getUnreadCount);
 
