@@ -269,7 +269,7 @@ setupSocketIO(io);
 // ════════════════════════════════════════════════════════════
 // DÉMARRAGE
 // ════════════════════════════════════════════════════════════
-const PORT = env.PORT || 3001;
+const PORT = env.PORT || 5000;
 
 async function start() {
   try {

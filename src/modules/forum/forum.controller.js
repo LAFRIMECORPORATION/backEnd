@@ -33,7 +33,7 @@ export async function getPost(req, res, next) {
 
 export async function updatePost(req, res, next) {
   try {
-    const post = await forumService.updatePost(req.params.id, req.user.id, req.body);
+    const post = await forumService.updatePost(req.params.id, req.user.id, req.body, req.user.role);
     return success(res, post, "Post mis à jour.");
   } catch (err) { next(err); }
 }

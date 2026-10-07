@@ -8,50 +8,52 @@ datasource db {
 }
 
 model User {
-  id                   String               @id @default(uuid())
-  email                String               @unique
-  passwordHash         String               @map("password_hash")
-  role                 Role                 @default(student)
-  firstName            String               @map("first_name")
-  lastName             String               @map("last_name")
-  avatarUrl            String?              @map("avatar_url")
-  bio                  String?
-  reputationScore      Int                  @default(0) @map("reputation_score")
-  isVerified           Boolean              @default(false) @map("is_verified")
-  isActive             Boolean              @default(true) @map("is_active")
-  kycValidated         Boolean              @default(false) @map("kyc_validated")
-  kycStatus            KycStatus            @default(pending) @map("kyc_status")
-  lastSeenAt           DateTime?            @map("last_seen_at")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
-  academyEnrollments   AcademyEnrollment[]
-  appointmentsOrg      Appointment[]        @relation("AppointmentOrganizer")
-  appointmentsParticip Appointment[]        @relation("AppointmentParticipant")
-  auditLogs            AuditLog[]
-  collaborationsFrom   Collaboration[]      @relation("CollabRequester")
-  commentLikes         CommentLike[]
-  comments             Comment[]
-  conversations1       Conversation[]       @relation("ConvUser1")
-  conversations2       Conversation[]       @relation("ConvUser2")
-  feedEvents           FeedEvent[]
-  feedEventReads       FeedEventRead[]
-  forumPostLikes       ForumPostLike[]
-  forumPosts           ForumPost[]
-  investments          Investment[]
-  investorRequests     InvestorRequest[]
-  kycDocuments         KycDocument[]
-  kycFormData          KycFormData?
-  sentMessages         Message[]            @relation("MessageSender")
-  notifications        Notification[]
-  projectLikes         ProjectLike[]
-  projectSaves         ProjectSave[]
-  projects             Project[]            @relation("ProjectAuthor")
-  pushSubscriptions    PushSubscription[]
-  refreshTokens        RefreshToken[]
-  reports              Report[]
-  applications         RequestApplication[]
-  badges               UserBadge[]
-  profile              UserProfile?
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String                 @map("password_hash")
+  role                  Role                   @default(student)
+  firstName             String                 @map("first_name")
+  lastName              String                 @map("last_name")
+  avatarUrl             String?                @map("avatar_url")
+  bio                   String?
+  reputationScore       Int                    @default(0) @map("reputation_score")
+  isVerified            Boolean                @default(false) @map("is_verified")
+  isActive              Boolean                @default(true) @map("is_active")
+  kycValidated          Boolean                @default(false) @map("kyc_validated")
+  kycStatus             KycStatus              @default(pending) @map("kyc_status")
+  lastSeenAt            DateTime?              @map("last_seen_at")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  academyEnrollments    AcademyEnrollment[]
+  academyCourseLikes    AcademyCourseLike[]
+  academyCourseComments AcademyCourseComment[]
+  appointmentsOrg       Appointment[]          @relation("AppointmentOrganizer")
+  appointmentsParticip  Appointment[]          @relation("AppointmentParticipant")
+  auditLogs             AuditLog[]
+  collaborationsFrom    Collaboration[]        @relation("CollabRequester")
+  commentLikes          CommentLike[]
+  comments              Comment[]
+  conversations1        Conversation[]         @relation("ConvUser1")
+  conversations2        Conversation[]         @relation("ConvUser2")
+  feedEvents            FeedEvent[]
+  feedEventReads        FeedEventRead[]
+  forumPostLikes        ForumPostLike[]
+  forumPosts            ForumPost[]
+  investments           Investment[]
+  investorRequests      InvestorRequest[]
+  kycDocuments          KycDocument[]
+  kycFormData           KycFormData?
+  sentMessages          Message[]              @relation("MessageSender")
+  notifications         Notification[]
+  projectLikes          ProjectLike[]
+  projectSaves          ProjectSave[]
+  projects              Project[]              @relation("ProjectAuthor")
+  pushSubscriptions     PushSubscription[]
+  refreshTokens         RefreshToken[]
+  reports               Report[]
+  applications          RequestApplication[]
+  badges                UserBadge[]
+  profile               UserProfile?
 
   @@map("users")
 }
@@ -423,22 +425,50 @@ model Appointment {
 }
 
 model AcademyCourse {
-  id          String              @id @default(uuid())
+  id          String                 @id @default(uuid())
   title       String
   description String
-  courseType  String              @map("course_type")
-  contentUrl  String?             @map("content_url")
-  isPremium   Boolean             @default(false) @map("is_premium")
-  durationMin Int?                @map("duration_min")
-  level       String              @default("Débutant")
-  icon        String              @default("📚")
-  rating      Decimal             @default(0) @db.Decimal(3, 1)
-  enrollCount Int                 @default(0) @map("enroll_count")
-  publishedAt DateTime?           @map("published_at")
-  createdAt   DateTime            @default(now()) @map("created_at")
+  courseType  String                 @map("course_type")
+  contentUrl  String?                @map("content_url")
+  isPremium   Boolean                @default(false) @map("is_premium")
+  durationMin Int?                   @map("duration_min")
+  level       String                 @default("Débutant")
+  icon        String                 @default("📚")
+  rating      Decimal                @default(0) @db.Decimal(3, 1)
+  enrollCount Int                    @default(0) @map("enroll_count")
+  publishedAt DateTime?              @map("published_at")
+  createdAt   DateTime               @default(now()) @map("created_at")
   enrollments AcademyEnrollment[]
+  likes       AcademyCourseLike[]
+  comments    AcademyCourseComment[]
 
   @@map("academy_courses")
+}
+
+model AcademyCourseLike {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  courseId  String        @map("course_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    AcademyCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@map("academy_course_likes")
+}
+
+model AcademyCourseComment {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  courseId  String        @map("course_id")
+  content   String
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    AcademyCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, createdAt])
+  @@map("academy_course_comments")
 }
 
 model AcademyEnrollment {
@@ -456,27 +486,27 @@ model AcademyEnrollment {
 }
 
 model ForumPost {
-  id           String        @id @default(uuid())
-  authorId     String        @map("author_id")
-  categoryId   String        @map("category_id")
-  parentId     String?       @map("parent_id")
+  id           String          @id @default(uuid())
+  authorId     String          @map("author_id")
+  categoryId   String          @map("category_id")
+  parentId     String?         @map("parent_id")
   title        String?
   content      String
-  likesCount   Int           @default(0) @map("likes_count")
-  tags         String[]      @default([])
-  isPinned     Boolean       @default(false) @map("is_pinned")
-  isDeleted    Boolean       @default(false) @map("is_deleted")
-  deletedAt    DateTime?     @map("deleted_at")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  isEdited     Boolean       @default(false) @map("is_edited")
-  repliesCount Int           @default(0) @map("replies_count")
-  viewsCount   Int           @default(0) @map("views_count")
-  author       User          @relation(fields: [authorId], references: [id])
-  category     ForumCategory @relation(fields: [categoryId], references: [id])
+  likesCount   Int             @default(0) @map("likes_count")
+  tags         String[]        @default([])
+  isPinned     Boolean         @default(false) @map("is_pinned")
+  isDeleted    Boolean         @default(false) @map("is_deleted")
+  deletedAt    DateTime?       @map("deleted_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  isEdited     Boolean         @default(false) @map("is_edited")
+  repliesCount Int             @default(0) @map("replies_count")
+  viewsCount   Int             @default(0) @map("views_count")
+  author       User            @relation(fields: [authorId], references: [id])
+  category     ForumCategory   @relation(fields: [categoryId], references: [id])
   likes        ForumPostLike[]
-  parent       ForumPost?    @relation("PostReplies", fields: [parentId], references: [id])
-  replies      ForumPost[]   @relation("PostReplies")
+  parent       ForumPost?      @relation("PostReplies", fields: [parentId], references: [id])
+  replies      ForumPost[]     @relation("PostReplies")
 
   @@map("forum_posts")
 }
@@ -506,29 +536,29 @@ model ForumCategory {
 }
 
 model FeedEvent {
-  id         String        @id @default(uuid())
-  actorId    String        @map("actor_id")
-  eventType  FeedEventType @map("event_type")
-  entityType String        @map("entity_type")
-  entityId   String        @map("entity_id")
+  id         String          @id @default(uuid())
+  actorId    String          @map("actor_id")
+  eventType  FeedEventType   @map("event_type")
+  entityType String          @map("entity_type")
+  entityId   String          @map("entity_id")
   metadata   Json?
   categories String[]
-  projectId  String?       @map("project_id")
-  createdAt  DateTime      @default(now()) @map("created_at")
-  actor      User          @relation(fields: [actorId], references: [id], onDelete: Cascade)
-  project    Project?      @relation(fields: [projectId], references: [id])
+  projectId  String?         @map("project_id")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  actor      User            @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  project    Project?        @relation(fields: [projectId], references: [id])
   reads      FeedEventRead[]
 
   @@map("feed_events")
 }
 
 model FeedEventRead {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  eventId   String    @map("event_id")
-  readAt    DateTime  @default(now()) @map("read_at")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event     FeedEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id      String    @id @default(uuid())
+  userId  String    @map("user_id")
+  eventId String    @map("event_id")
+  readAt  DateTime  @default(now()) @map("read_at")
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event   FeedEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])

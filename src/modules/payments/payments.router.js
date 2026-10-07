@@ -14,6 +14,7 @@ import { requireKyc }    from "../../middleware/authorize.js";
 import { paymentLimiter, webhookLimiter } from "../../middleware/rateLimiter.js";
 import * as validate     from "./payments.validation.js";
 import * as ctrl         from "./payments.controller.js";
+import { validateQuery, adminListInvestmentsQuerySchema } from "../admin/admin.validation.js";
 
 const router = express.Router();
 
@@ -163,6 +164,7 @@ export const adminInvestmentsRouter = (() => {
     "/",
     authenticate,
     requireRole(["admin"]),
+    validateQuery(adminListInvestmentsQuerySchema),
     ctrl.adminListInvestments
   );
 

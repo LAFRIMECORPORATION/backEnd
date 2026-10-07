@@ -536,10 +536,30 @@ export async function cancelExpiredPayments() {
 // ADMIN � Lister tous les investissements
 // ------------------------------------------------------------
 
-export async function adminListInvestments({ page = 1, limit = 20, status }) {
+export async function adminListInvestments({
+  page = 1,
+  limit = 20,
+  status,
+  method,
+  search,
+}) {
   const skip = (page - 1) * limit;
 
-  const where = status ? { status } : {};
+  const where = {
+    ...(status ? { status } : {}),
+    ...(method ? { paymentMethod: method } : {}),
+    ...(search
+      ? {
+          OR: [
+            { investor: { firstName: { contains: search, mode: "insensitive" } } },
+            { investor: { lastName: { contains: search, mode: "insensitive" } } },
+            { investor: { email: { contains: search, mode: "insensitive" } } },
+            { project: { title: { contains: search, mode: "insensitive" } } },
+            { externalTxId: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
 
   const [investments, total] = await Promise.all([
     prisma.investment.findMany({
@@ -554,6 +574,9 @@ export async function adminListInvestments({ page = 1, limit = 20, status }) {
         paymentMethod: true,
         status: true,
         platformFee: true,
+        refundReason: true,
+        externalTxId: true,
+        escrowRef: true,
         createdAt: true,
         investor: {
           select: {
@@ -571,7 +594,18 @@ export async function adminListInvestments({ page = 1, limit = 20, status }) {
           },
         },
         transactions: {
-          select: { status: true, provider: true, createdAt: true },
+          select: {
+            id: true,
+            status: true,
+            provider: true,
+            providerTxId: true,
+            amount: true,
+            currency: true,
+            errorMessage: true,
+            createdAt: true,
+            updatedAt: true,
+            expiresAt: true,
+          },
           orderBy: { createdAt: "desc" },
           take: 1,
         },

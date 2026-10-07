@@ -8,6 +8,7 @@ import { AppError } from "../../middleware/errorHandler.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { randomUUID } from "node:crypto";
 import * as paymentsService from "../payments/payments.service.js";
+import * as forumService from "../forum/forum.service.js";
 
 // ════════════════════════════════════════════════════════════
 // STATISTIQUES GLOBALES
@@ -620,8 +621,15 @@ export async function deleteMarketplaceOffer(offerId, adminId, reason) {
   return { deleted: true, offerId };
 }
 
-export async function getInvestmentsControl({ status } = {}) {
-  return paymentsService.adminListInvestments({ status: status && status !== "all" ? status : undefined, page: 1, limit: 100 });
+export async function getInvestmentsControl({ status, method, search, page = 1, limit = 20 } = {}) {
+  const result = await paymentsService.adminListInvestments({
+    status: status && status !== "all" ? status : undefined,
+    method: method && method !== "all" ? method : undefined,
+    search: search || undefined,
+    page: Math.max(1, Number(page) || 1),
+    limit: Math.min(100, Math.max(1, Number(limit) || 20)),
+  });
+  return result;
 }
 
 export async function refundInvestment(investmentId, adminId, reason) {
@@ -677,29 +685,60 @@ export async function deleteAcademyCourse(courseId, adminId) {
   return { deleted: true, courseId };
 }
 
-export async function getForumControl() {
-  const [posts, total, byCategory] = await Promise.all([
+export async function getForumControl({ page = 1, limit = 30, status = "active", search } = {}) {
+  const currentPage = Math.max(1, Number(page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(limit) || 30));
+  const where = {
+    parentId: null,
+    ...(status === "active" ? { isDeleted: false } : status === "deleted" ? { isDeleted: true } : {}),
+    ...(search
+      ? {
+          OR: [
+            { title: { contains: search, mode: "insensitive" } },
+            { content: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+  const [posts, total, activeCount, deletedCount, byCategory] = await Promise.all([
     prisma.forumPost.findMany({
-      where: { parentId: null },
+      where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
       select: {
         id: true, title: true, content: true, likesCount: true,
         repliesCount: true, viewsCount: true, isPinned: true,
         isDeleted: true, createdAt: true,
-        author: { select: { id: true, firstName: true, lastName: true, email: true } },
+        author: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
         category: { select: { id: true, name: true } },
         _count: { select: { replies: true, likes: true } },
       },
     }),
-    prisma.forumPost.count({ where: { parentId: null } }),
+    prisma.forumPost.count({ where }),
+    prisma.forumPost.count({ where: { parentId: null, isDeleted: false } }),
+    prisma.forumPost.count({ where: { parentId: null, isDeleted: true } }),
     prisma.forumPost.groupBy({ by: ["categoryId"], where: { parentId: null }, _count: { id: true } }),
   ]);
-  return { posts, total, postsByCategory: byCategory.map(item => ({ categoryId: item.categoryId, count: item._count.id })) };
+  return {
+    posts: posts.map((post) => ({
+      ...post,
+      author: post.author?.role === "admin"
+        ? { ...post.author, firstName: "adminlaunchpad", lastName: "" }
+        : post.author,
+    })),
+    total,
+    activeCount,
+    deletedCount,
+    page: currentPage,
+    limit: pageSize,
+    totalPages: Math.ceil(total / pageSize),
+    postsByCategory: byCategory.map(item => ({ categoryId: item.categoryId, count: item._count.id })),
+  };
 }
 
 export async function toggleForumPin(postId, adminId) {
-  const post = await prisma.forumPost.findUnique({ where: { id: postId }, select: { id: true, isPinned: true } });
+  const post = await prisma.forumPost.findFirst({ where: { id: postId, isDeleted: false }, select: { id: true, isPinned: true } });
   if (!post) throw new AppError("Publication forum introuvable.", 404, "NOT_FOUND");
   const updated = await prisma.forumPost.update({ where: { id: postId }, data: { isPinned: !post.isPinned }, select: { id: true, isPinned: true } });
   await prisma.auditLog.create({ data: { actorId: adminId, action: updated.isPinned ? "FORUM_POST_PINNED" : "FORUM_POST_UNPINNED", entityType: "forum_post", entityId: postId, newValues: updated } });
@@ -714,4 +753,68 @@ export async function deleteForumPost(postId, adminId) {
     await tx.auditLog.create({ data: { actorId: adminId, action: "FORUM_POST_DELETED", entityType: "forum_post", entityId: postId, oldValues: { title: post.title } } });
   });
   return { deleted: true, postId };
+}
+
+export async function createAdminForumPost(adminId, data) {
+  const post = await forumService.createPost(adminId, data);
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "ADMIN_FORUM_POST_CREATED",
+      entityType: "forum_post",
+      entityId: post.id,
+      newValues: { title: post.title, category: data.category },
+    },
+  });
+  return post;
+}
+
+export async function updateAdminForumPost(postId, adminId, data) {
+  const previous = await prisma.forumPost.findUnique({
+    where: { id: postId },
+    select: { id: true, title: true, content: true, isDeleted: true },
+  });
+  if (!previous || previous.isDeleted) {
+    throw new AppError("Publication forum introuvable.", 404, "NOT_FOUND");
+  }
+
+  const post = await forumService.updatePost(postId, adminId, data, "admin");
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "ADMIN_FORUM_POST_UPDATED",
+      entityType: "forum_post",
+      entityId: postId,
+      oldValues: { title: previous.title },
+      newValues: { title: post.title },
+    },
+  });
+  return post;
+}
+
+export async function restoreForumPost(postId, adminId) {
+  const post = await prisma.forumPost.findUnique({
+    where: { id: postId },
+    select: { id: true, title: true, isDeleted: true },
+  });
+  if (!post) throw new AppError("Publication forum introuvable.", 404, "NOT_FOUND");
+  if (!post.isDeleted) throw new AppError("Cette publication n'est pas supprimée.", 400, "INVALID_STATUS");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.forumPost.update({
+      where: { id: postId },
+      data: { isDeleted: false, deletedAt: null },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: "FORUM_POST_RESTORED",
+        entityType: "forum_post",
+        entityId: postId,
+        oldValues: { title: post.title, isDeleted: true },
+        newValues: { isDeleted: false },
+      },
+    });
+  });
+  return { restored: true, postId };
 }

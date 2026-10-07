@@ -67,11 +67,22 @@ export const auditLogsQuerySchema = z.object({
 
 // ── Filtres liste investissements (admin) ─────────────────
 export const adminListInvestmentsQuerySchema = z.object({
-  page:    z.string().optional(),
-  limit:   z.string().optional(),
-  status:  z.string().optional(),
-  method:  z.string().optional(),
-  search:  z.string().max(100).optional(),
+  page:    z.string().regex(/^\d+$/).optional(),
+  limit:   z.string().regex(/^\d+$/).optional(),
+  status:  z.enum(["pending", "in_escrow", "released", "refunded", "failed", "all"]).optional(),
+  method:  z.enum(["mtn_money", "orange_money", "stripe", "bank_transfer", "all"]).optional(),
+  search:  z.string().trim().max(100).optional(),
+});
+
+export const investmentRefundSchema = z.object({
+  reason: z.string().trim().min(5, "Le motif doit contenir au moins 5 caractères.").max(500),
+});
+
+export const adminForumQuerySchema = z.object({
+  page: z.string().regex(/^\d+$/).optional(),
+  limit: z.string().regex(/^\d+$/).optional(),
+  status: z.enum(["active", "deleted", "all"]).optional(),
+  search: z.string().trim().max(100).optional(),
 });
 
 // ── Middleware de validation body ──────────────────────────

@@ -129,8 +129,14 @@ export async function refundInvestment(req, res, next) {
 export async function adminListInvestments(req, res, next) {
   try {
     const { page, limit } = getPagination(req.query);
-    const { status } = req.query;
-    const result = await paymentsService.adminListInvestments({ page, limit, status });
+    const { status, method, search } = req.query;
+    const result = await paymentsService.adminListInvestments({
+      page,
+      limit,
+      status: status === "all" ? undefined : status,
+      method: method === "all" ? undefined : method,
+      search: search || undefined,
+    });
     return paginated(res, { data: result.investments, page, limit, total: result.total });
   } catch (error) {
     next(error);

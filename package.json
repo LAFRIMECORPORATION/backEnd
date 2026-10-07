@@ -7,8 +7,11 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "test": "node --test",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status",
     "db:pull": "prisma db pull",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate"

@@ -170,14 +170,29 @@ export async function getPost(postId, userId) {
 // MODIFIER UN POST
 // PUT /api/forum/posts/:id
 // ════════════════════════════════════════════════════════════
-export async function updatePost(postId, userId, { title, content, tags }) {
+export async function updatePost(postId, userId, { title, content, tags, category }, userRole) {
   const post = await prisma.forumPost.findFirst({
     where: { id: postId, isDeleted: false },
     select: { authorId: true },
   });
 
   if (!post) throw new AppError("Post introuvable.", 404, "NOT_FOUND");
-  if (post.authorId !== userId) throw new AppError("Non autorisé.", 403, "FORBIDDEN");
+  if (post.authorId !== userId && userRole !== "admin") {
+    throw new AppError("Non autorisé.", 403, "FORBIDDEN");
+  }
+
+  let categoryId;
+  if (category) {
+    if (!FORUM_CATEGORIES.includes(category)) {
+      throw new AppError("Catégorie invalide.", 400, "INVALID_CATEGORY");
+    }
+    const categoryRecord = await prisma.forumCategory.findUnique({
+      where: { name: category },
+      select: { id: true },
+    });
+    if (!categoryRecord) throw new AppError("Catégorie introuvable.", 404, "NOT_FOUND");
+    categoryId = categoryRecord.id;
+  }
 
   return prisma.forumPost.update({
     where: { id: postId },
@@ -185,6 +200,7 @@ export async function updatePost(postId, userId, { title, content, tags }) {
       ...(title   ? { title:   title.trim()   } : {}),
       ...(content ? { content: content.trim() } : {}),
       ...(tags    ? { tags }                    : {}),
+      ...(categoryId ? { categoryId } : {}),
       isEdited: true,
     },
     select: _postSelect(userId),
@@ -377,6 +393,7 @@ function _postSelect(userId) {
         firstName: true,
         lastName:  true,
         avatarUrl: true,
+        role:      true,
       },
     },
     likes: userId

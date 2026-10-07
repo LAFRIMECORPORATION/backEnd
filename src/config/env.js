@@ -22,7 +22,7 @@ if (missing.length > 0) {
 
 export const env = {
   // Serveur
-  PORT:             parseInt(process.env.PORT || "3000"),
+  PORT:             parseInt(process.env.PORT || "5000", 10),
   NODE_ENV:         process.env.NODE_ENV || "development",
   FRONTEND_URL:     process.env.FRONTEND_URL || "http://localhost:5173",
   IS_PROD:          process.env.NODE_ENV === "production",

@@ -1,5 +1,18 @@
 # Analyse du backend
 
+> **État révisé le 2026-10-07.** Les observations générales ci-dessous sont
+> complétées par les contrats Academy actuels : le module prend en charge
+> catalogue public, cours administrés, inscriptions/progression, likes et
+> commentaires persistés. Les contrôles vérifiés pour le dernier correctif
+> sont `node --check` sur les fichiers Academy concernés et `npx prisma validate`.
+> Cela ne constitue pas une validation end-to-end contre une base active.
+
+> **Cohérence de démarrage — 2026-10-07 :** `.env.example` contient les
+> variables obligatoires et des valeurs locales d'exemple ; le port backend
+> par défaut est aligné sur le frontend (`5000`). `npm test` exécute les tests
+> Node natifs des contrats Academy, forum et validation admin. Aucun test
+> end-to-end avec une base active n'est encore configuré.
+
 ## 1. Architecture backend
 
 Le backend est structuré par composants métier :
@@ -65,6 +78,23 @@ Cette organisation est un bon point de départ pour un système robuste et évol
 
 - nécessaire pour gouverner le produit
 - contrôle, validation, supervision doivent être stricts et testés
+
+### Academy
+
+- Le catalogue public renvoie uniquement les formations publiées.
+- Le détail d'une formation accepte l'authentification facultative : les
+  visiteurs peuvent lire le cours et les commentaires ; un compte connecté
+  reçoit aussi son état `likedByMe`.
+- Likes et commentaires sont persistés par Prisma. La relation Academy d'un
+  commentaire est `user` (pas `author`) ; la réponse conserve `user` et fournit
+  un alias `author` avec le nom pour l'affichage frontend.
+- Les mutations de likes et commentaires nécessitent une session ; la
+  validation Zod borne le contenu et le corps de la requête.
+- L'accès et les scénarios de base doivent encore être validés avec une API et
+  une base de données réellement démarrées.
+
+Les contrats frontend sont centralisés dans `LaunchPad/src/utils/api.js` et les
+routes correspondantes dans `src/modules/academy/academy.router.js`.
 
 ## 5. Bugs et incohérences détectées
 

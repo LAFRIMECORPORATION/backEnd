@@ -135,8 +135,29 @@ export async function deleteAcademyCourse(req, res, next) {
 }
 
 export async function getForumControl(req, res, next) {
-  try { return success(res, await svc.getForumControl()); }
+  try { return success(res, await svc.getForumControl(req.query)); }
   catch (err) { next(err); }
+}
+
+export async function createAdminForumPost(req, res, next) {
+  try {
+    return success(
+      res,
+      await svc.createAdminForumPost(req.user.id, req.body),
+      "Publication admin créée.",
+      201,
+    );
+  } catch (err) { next(err); }
+}
+
+export async function updateAdminForumPost(req, res, next) {
+  try {
+    return success(
+      res,
+      await svc.updateAdminForumPost(req.params.id, req.user.id, req.body),
+      "Publication admin modifiée.",
+    );
+  } catch (err) { next(err); }
 }
 
 export async function toggleForumPin(req, res, next) {
@@ -146,5 +167,10 @@ export async function toggleForumPin(req, res, next) {
 
 export async function deleteForumPost(req, res, next) {
   try { return success(res, await svc.deleteForumPost(req.params.id, req.user.id), "Publication forum supprimée."); }
+  catch (err) { next(err); }
+}
+
+export async function restoreForumPost(req, res, next) {
+  try { return success(res, await svc.restoreForumPost(req.params.id, req.user.id), "Publication restaurée."); }
   catch (err) { next(err); }
 }
