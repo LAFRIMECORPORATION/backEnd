@@ -1,5 +1,11 @@
 # Analyse du backend
 
+> **Mise à jour — 2026-10-18 :** les routes sont inventoriées dans
+> `../LaunchPad/API_CONTRACTS.md`. Les contrats critiques de messagerie et de
+> mise à jour projet disposent de tests statiques ; `npm test` passe (8/8) et
+> la vérification syntaxique Node passe. Les appels réels contre une base
+> active, les sockets à deux comptes et les paiements sandbox restent à valider.
+
 > **État révisé le 2026-10-07.** Les observations générales ci-dessous sont
 > complétées par les contrats Academy actuels : le module prend en charge
 > catalogue public, cours administrés, inscriptions/progression, likes et
@@ -43,7 +49,8 @@ Cette organisation est un bon point de départ pour un système robuste et évol
 
 - certains dossiers et fichiers présentent des incohérences de nommage
 - la maturité des modules n’est pas homogène
-- certaines routes doivent être alignées avec le front pour éviter des défauts de contrat API
+- les contrats frontend/backend doivent rester alignés ; l'inventaire et les
+  tests de régression sont maintenant documentés
 - les modules sensibles requièrent une validation plus strictes : paiements, admin, KYC, messages
 
 ## 4. Analyse par module
@@ -102,7 +109,7 @@ routes correspondantes dans `src/modules/academy/academy.router.js`.
 - routes non homogénéisées entre front et back
 - certains modules sont plus avancés que d’autres
 - certaines validations métier peuvent manquer de couverture
-- la documentation des API est insuffisante pour éviter les erreurs de contrat
+- conserver et compléter l'inventaire API quand les routeurs évoluent
 
 ## 6. Plan de refonte backend priorisé
 
