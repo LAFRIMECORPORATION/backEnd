@@ -2,7 +2,7 @@
 
 > **Mise à jour — 2026-10-18 :** les routes sont inventoriées dans
 > `../LaunchPad/API_CONTRACTS.md`. Les contrats critiques de messagerie et de
-> mise à jour projet disposent de tests statiques ; `npm test` passe (8/8) et
+> mise à jour projet disposent de tests statiques ; `npm test` passe (11/11) et
 > la vérification syntaxique Node passe. Les appels réels contre une base
 > active, les sockets à deux comptes et les paiements sandbox restent à valider.
 
